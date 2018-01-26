@@ -128,8 +128,16 @@ for class_id,resolutions in RESOLUTIONS.copy().items():
 MANIPULATIONS = ['jpg70', 'jpg90', 'gamma0.8', 'gamma1.2', 'bicubic0.5', 'bicubic0.8', 'bicubic1.5', 'bicubic2.0']
 
 N_CLASSES = len(CLASSES)
-load_img_fast_jpg  = lambda img_path: jpeg.JPEG(img_path).decode()
+# load_img_fast_jpg  = lambda img_path: jpeg.JPEG(img_path).decode()
 load_img  = lambda img_path: np.array(Image.open(img_path))
+
+def load_img_fast_jpg(img_path):
+    try:
+        x = jpeg.JPEG(img_path).decode()
+        return x
+    except Exception:
+        print('Decoding error:', img_path)
+        return load_img(img_path)
 
 def random_manipulation(img, manipulation=None):
 
@@ -546,7 +554,8 @@ if not (args.test or args.test_train):
                 verbose=0,  save_best_only=True, save_weights_only=False, mode='max', period=1)
 
         reduce_lr = ReduceLROnPlateau(monitor=monitor, factor=0.5, patience=10, min_lr=1e-9, epsilon = 0.00001, verbose=1, mode='max')
-
+        print(int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)))
+        print(len(VALIDATION_TRANSFORMS), len(ids_val), args.batch_size)
         model.fit_generator(
                 generator        = gen(ids_train, args.batch_size),
                 steps_per_epoch  = int(math.ceil(len(ids_train)  // args.batch_size)),
