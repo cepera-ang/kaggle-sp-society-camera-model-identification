@@ -572,7 +572,7 @@ else:
     if args.test:
         ids = glob.glob(join(TEST_FOLDER,'*.tif'))
     elif args.test_train:
-        ids = glob.glob(join(TRAIN_FOLDER,'*/*.jpg'))
+        ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
     else:
         assert False
 
@@ -587,37 +587,68 @@ else:
             csv_writer.writerow(['fname','camera'])
         else:
             correct_predictions = 0
-
+        
+        fnames = []
+        labels = []
+        
+        probs = np.array([]*10).reshape((0,10))
         for i, idx in enumerate(tqdm(ids)):
-
+            fnames.append(idx.split("/")[-1])
             img = np.array(Image.open(idx))
+            if args.test_train:
+                img = get_crop(img, CROP_SIZE, random_crop=False)
 
             manipulated = np.float32([1. if idx.find('manip') != -1 else 0.])
-
+            
             sx = img.shape[1] // CROP_SIZE
             sy = img.shape[0] // CROP_SIZE
-            img_batch = np.zeros((2* sx * sy, CROP_SIZE, CROP_SIZE, 3), dtype=np.float32)
-            manipulated_batch = np.zeros((2* sx * sy, 1),  dtype=np.float32)
-            i = 0
-            for it in range(2):
-                if it == 1:
-                    img = np.swapaxes(img, 0,1)
-                for x in range(sx):
-                    for y in range(sy):
-                        _img = np.array(img[y*CROP_SIZE:(y+1)*CROP_SIZE, x*CROP_SIZE:(x+1)*CROP_SIZE])
-
-                        img_batch[i]         = preprocess_image(_img)
-                        manipulated_batch[i] = manipulated
-                        i += 1
-
-            prediction = model.predict_on_batch([img_batch,manipulated_batch])
+            j = 0
+            if True: 
+                k = 8
+                img_batch = np.zeros((k * sx * sy, CROP_SIZE, CROP_SIZE, 3), dtype=np.float32)
+                manipulated_batch = np.zeros((k * sx * sy, 1),  dtype=np.float32)
+                timg = cv2.transpose(img)
+                for _img in [img, cv2.flip(img, 0), cv2.flip(img, 1), cv2.flip(img, -1),
+                            timg, cv2.flip(timg, 0), cv2.flip(timg, 1), cv2.flip(timg, -1)]:
+                    img_batch[j]         = preprocess_image(_img)
+                    manipulated_batch[j] = manipulated
+                    j+=1
+            # else:
+            #     img_batch = np.zeros((2 * sx * sy, CROP_SIZE, CROP_SIZE, 3), dtype=np.float32)
+            #     manipulated_batch = np.zeros((2 * sx * sy, 1),  dtype=np.float32)
+            #     for it in range(2):
+            #         if it == 1:
+            #             img = np.swapaxes(img, 0,1)
+            #             t = sx
+            #             sx = sy
+            #             sy = t                    
+            #         for x in range(sx):
+            #             for y in range(sy):
+            #                 _img = np.array(img[y*CROP_SIZE:(y+1)*CROP_SIZE, x*CROP_SIZE:(x+1)*CROP_SIZE])
+            #                 img_batch[j]         = preprocess_image(_img)
+            #                 manipulated_batch[j] = manipulated
+            #                 j += 1
+            
+            l = img_batch.shape[0]
+            batch_size = args.batch_size
+            for i in range(l//batch_size+1):
+                batch_pred = model.predict_on_batch([img_batch[i*batch_size:min(l,(i+1)*batch_size)], 
+                                                     manipulated_batch[i*batch_size:min(l,(i+1)*batch_size)]])
+                if i==0:
+                    prediction = batch_pred
+                else:
+                    prediction = np.concatenate((prediction, batch_pred),axis=0)                    
+                    
             if prediction.shape[0] != 1: # TTA
-                # all crops and flip
-                # TODO: geometric mean
-                prediction = np.mean(prediction, axis=0)
-
+                #prediction = np.mean(prediction, axis=0)
+                prediction = np.max(prediction, axis=0)
+                #prediction = np.sqrt((np.mean(prediction**2, axis=0))
+                #prediction = scipy.stats.mstats.gmean(prediction, axis=0)
+            
+            #print(prediction)
             prediction_class_idx = np.argmax(prediction)
-
+            probs = np.vstack((probs, prediction))
+            
             if args.test_train:
                 class_idx = get_class(idx.split('/')[-2])
                 if class_idx == prediction_class_idx:
@@ -625,7 +656,12 @@ else:
 
             if args.test:
                 csv_writer.writerow([idx.split('/')[-1], CLASSES[prediction_class_idx]])
-
+        
+        ans = pd.DataFrame(0, columns=CLASSES, index=fnames)
+        for i in range(10):
+            ans[CLASSES[i]] = probs[:,i]
+        pd.DataFrame(ans).to_hdf("sub_8_max_"+args.model.split("/")[-1],"prob")
+        
         if args.test_train:
-            print("Accuracy: " + str(correct_predictions / i))
+            print("Accuracy: " + str(correct_predictions / len(ids)))
                 
