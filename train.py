@@ -80,6 +80,7 @@ EXTRA_TRAIN_FOLDER = 'flickr_images'
 EXTRA_VAL_FOLDER   = 'val_images'
 TEST_FOLDER        = 'test'
 MODEL_FOLDER       = 'models'
+SUBMITS_FOLDER = 'submits'
 
 CROP_SIZE = args.crop_size
 CLASSES = [
@@ -579,8 +580,8 @@ else:
     ids.sort()
     
     from conditional import conditional
-
-    with conditional(args.test, open('submission.csv', 'w')) as csvfile:
+    submission_file = 'submission {}.csv'.format(args.model.split(sep='/')[-1])
+    with conditional(args.test, open(join(SUBMITS_FOLDER, submission_file), 'w')) as csvfile:
 
         if args.test:
             csv_writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
