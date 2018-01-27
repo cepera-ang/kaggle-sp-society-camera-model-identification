@@ -77,6 +77,7 @@ args = parser.parse_args()
 
 TRAIN_FOLDER       = 'train'
 EXTRA_TRAIN_FOLDER = 'flickr_images'
+NEW_TRAIN_FOLDER = '../input/flickr_new'
 EXTRA_VAL_FOLDER   = 'val_images'
 TEST_FOLDER        = 'test'
 MODEL_FOLDER       = 'models'
@@ -527,6 +528,8 @@ if not (args.test or args.test_train):
         extra_train_ids = [os.path.join(EXTRA_TRAIN_FOLDER,line.rstrip('\n')) for line in open(os.path.join(EXTRA_TRAIN_FOLDER, 'good_jpgs'))]
         extra_train_ids.sort()
         ids_train.extend(extra_train_ids)
+        new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
+        ids_train.extend(new_train_ids)
 
         extra_val_ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
         extra_val_ids.sort()
