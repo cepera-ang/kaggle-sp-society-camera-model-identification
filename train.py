@@ -141,6 +141,14 @@ def load_img_fast_jpg(img_path):
         print('Decoding error:', img_path)
         return load_img(img_path)
 
+
+def check_remove_broken(img_path):
+    try:
+        x = jpeg.JPEG(img_path).decode()
+    except Exception:
+        print('Decoding error:', img_path)
+        os.remove(img_path)
+
 def random_manipulation(img, manipulation=None):
 
     if manipulation == None:
@@ -528,6 +536,9 @@ if not (args.test or args.test_train):
         extra_train_ids = [os.path.join(EXTRA_TRAIN_FOLDER,line.rstrip('\n')) for line in open(os.path.join(EXTRA_TRAIN_FOLDER, 'good_jpgs'))]
         extra_train_ids.sort()
         ids_train.extend(extra_train_ids)
+        new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
+        p = Pool(cpu_count() - 2)
+        p.map(check_remove_broken, tqdm(new_train_ids))
         new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
         ids_train.extend(new_train_ids)
 
