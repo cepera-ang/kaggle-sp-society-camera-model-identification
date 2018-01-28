@@ -1,5 +1,14 @@
 # Copyright team STAMP
 
+if __name__ == '__main__':
+    import os
+    gpu_use = 2
+    FOLD_TO_CALC = [1, 2, 3, 4]
+    print('GPU use: {}'.format(gpu_use))
+    os.environ["KERAS_BACKEND"] = "tensorflow"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
+
+
 from a00_common_functions import *
 import argparse
 import glob
@@ -31,7 +40,7 @@ from itertools import  islice
 parser = argparse.ArgumentParser()
 parser.add_argument('--max-epoch', type=int, default=200, help='Epoch to run')
 parser.add_argument('-b', '--batch-size', type=int, default=16, help='Batch Size during training, e.g. -b 64')
-parser.add_argument('-l', '--learning_rate', type=float, default=1e-4, help='Initial learning rate')
+parser.add_argument('-l', '--learning_rate', type=float, default=1e-5, help='Initial learning rate')
 parser.add_argument('-m', '--model', help='load hdf5 model including weights (and continue training)')
 parser.add_argument('-w', '--weights', help='load hdf5 weights only (and continue training)')
 parser.add_argument('-do', '--dropout', type=float, default=0.3, help='Dropout rate for FC layers')
@@ -383,7 +392,7 @@ def create_models(nfolds):
     ids.sort()
 
     if not args.extra_dataset:
-        ids_train, ids_val = train_test_split(ids, test_size=0.1, random_state=SEED)
+        ids_train, ids_val = train_test_split(ids, test_size=0.1, random_state=2018)
     else:
         ids_train = ids
         ids_val   = [ ]

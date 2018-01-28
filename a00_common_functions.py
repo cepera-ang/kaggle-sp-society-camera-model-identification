@@ -29,7 +29,7 @@ if not os.path.isdir(OUTPUT_PATH):
 MODELS_PATH = '../models/'
 if not os.path.isdir(MODELS_PATH):
     os.mkdir(MODELS_PATH)
-HISTORY_FOLDER_PATH = ".../models/history/"
+HISTORY_FOLDER_PATH = "../models/history/"
 if not os.path.isdir(HISTORY_FOLDER_PATH):
     os.mkdir(HISTORY_FOLDER_PATH)
 SUBM_PATH = '../subm/'
