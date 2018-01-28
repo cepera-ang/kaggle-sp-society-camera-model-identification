@@ -532,7 +532,7 @@ if not (args.test or args.test_train):
         low_quality =     [os.path.join(EXTRA_TRAIN_FOLDER,line.rstrip('\n').split(' ')[0]) \
             for line in open(os.path.join(EXTRA_TRAIN_FOLDER, 'low-quality'))]
         extra_train_ids = [idx for idx in extra_train_ids if idx not in low_quality]
-        extra_train_ids = [c for c in extra_train_ids if isfile(c)]
+        #extra_train_ids = [c for c in extra_train_ids if isfile(c)]
         extra_train_ids.sort()
         ids_train.extend(extra_train_ids)
         random.shuffle(ids_train)
