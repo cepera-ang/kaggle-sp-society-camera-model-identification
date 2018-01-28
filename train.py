@@ -75,6 +75,7 @@ parser.add_argument('-x', '--extra-dataset', action='store_true', help='Use data
 parser.add_argument('-v', '--verbose', action='store_true', help='Pring debug/verbose info')
 parser.add_argument('-e', '--ensembling', type=str, default='arithmetic', help='Type of ensembling: arithmetic|geometric for TTA')
 parser.add_argument('-tta', action='store_true', help='Enable test time augmentation')
+parser.add_argument('--check-train', action='store_true', default=False, help='Enable checking of all train JPEGs to remove broken')
 
 args = parser.parse_args()
 
@@ -167,12 +168,12 @@ def check_remove_broken(img_path):
         print('Decoding error:', img_path)
         os.remove(img_path)
 
-
 def check_load_ids(train_folder):
-    ids = glob.glob(join(train_folder, '*/*.jpg'))
-    print('Checking files in {} folder'.format(train_folder))
-    p = Pool(cpu_count() - 2)
-    p.map(check_remove_broken, tqdm(ids))
+    if args.check_train:
+        ids = glob.glob(join(train_folder, '*/*.jpg'))
+        print('Checking files in {} folder'.format(train_folder))
+        p = Pool(cpu_count() - 2)
+        p.map(check_remove_broken, tqdm(ids))
     ids = glob.glob(join(train_folder, '*/*.jpg'))
     return ids
 
@@ -286,7 +287,7 @@ def process_item(item, training, transforms=[[]]):
     # if shape not in RESOLUTIONS[class_idx]:
     #     return None
     # discard only too small images
-    if np.max(shape) < 2000:
+    if np.max(shape) < 2000 or np.min(shape) < 1100:
         return None
     # some images may not be downloaded correclty and are B/W, discard those
 
