@@ -22,17 +22,17 @@ random.seed(2016)
 np.random.seed(2016)
 
 
-INPUT_PATH = '../input/'
-OUTPUT_PATH = '../modified_data/'
+INPUT_PATH = '../../input/'
+OUTPUT_PATH = '../../modified_data/'
 if not os.path.isdir(OUTPUT_PATH):
     os.mkdir(OUTPUT_PATH)
-MODELS_PATH = '../models/'
+MODELS_PATH = '../../models/'
 if not os.path.isdir(MODELS_PATH):
     os.mkdir(MODELS_PATH)
-HISTORY_FOLDER_PATH = "../models/history/"
+HISTORY_FOLDER_PATH = "../../models/history/"
 if not os.path.isdir(HISTORY_FOLDER_PATH):
     os.mkdir(HISTORY_FOLDER_PATH)
-SUBM_PATH = '../subm/'
+SUBM_PATH = '../../subm/'
 if not os.path.isdir(SUBM_PATH):
     os.mkdir(SUBM_PATH)
 
