@@ -15,12 +15,13 @@ def md5_from_file(fname):
 
 
 def find_duplicates(path):
-    files = glob.glob(path + '**/*.jpg')
+    files = glob.glob(path + '**/*.jpg', recursive=True)
     out = open(OUTPUT_PATH + 'files_hash_stat.csv', 'w')
     out.write('path,md5\n')
     print('Files found: {}'.format(len(files)))
     all_hashes = dict()
     for f in files:
+        # print('Go for {}'.format(f))
         hsh = md5_from_file(f)
         out.write(f + ',' + hsh + '\n')
         if hsh in all_hashes:
@@ -34,7 +35,7 @@ def find_duplicates(path):
         if len(all_hashes[el]) > 1:
             print('Duplicate found. count: {}: {}'.format(len(all_hashes[el]), all_hashes[el][0]))
             duplicate_count += (len(all_hashes[el]) - 1)
-    print('Duplicate found: {}'.format(duplicate_count))
+    print('Total duplicates found: {}'.format(duplicate_count))
 
 
 if __name__ == '__main__':
