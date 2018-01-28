@@ -268,10 +268,17 @@ def create_models(nfolds):
 def test_1():
     import jpeg4py as jpeg
     a = jpeg.JPEG('../input/train\Samsung-Galaxy-Note3\(GalaxyN3)7.jpg').decode()
+    print(a.shape)
     print(a)
+    show_resized_image(a)
     print('\n\n\n\n')
     b = cv2.imread('../input/train\Samsung-Galaxy-Note3\(GalaxyN3)7.jpg')
+    b = np.transpose(b, (1, 0, 2))
+    b = np.flip(b, axis=0)
+    b = cv2.cvtColor(b, cv2.COLOR_BGR2RGB)
+    print(b.shape)
     print(b)
+    show_resized_image(b)
     exit()
 
 
