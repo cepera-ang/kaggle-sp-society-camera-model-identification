@@ -269,10 +269,14 @@ def test_1():
     import jpeg4py as jpeg
     a = jpeg.JPEG('../input/train\Samsung-Galaxy-Note3\(GalaxyN3)7.jpg').decode()
     print(a)
+    print('\n\n\n\n')
+    b = cv2.imread('../input/train\Samsung-Galaxy-Note3\(GalaxyN3)7.jpg')
+    print(b)
     exit()
 
 
 if __name__ == '__main__':
+    test_1()
     start_time = time.time()
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))

@@ -11,7 +11,6 @@ import math
 MANIPULATIONS = ['jpg70', 'jpg90', 'gamma0.8', 'gamma1.2', 'bicubic0.5', 'bicubic0.8', 'bicubic1.5', 'bicubic2.0']
 
 def check_remove_broken(img_path):
-    import jpeg4py as jpeg
     try:
         x = jpeg.JPEG(img_path).decode()
     except Exception:
@@ -108,15 +107,18 @@ def preprocess_image(img, classifier='ResNet50'):
 
 
 def process_item(item, training, transforms=[[]], crop_size=512, classifier='ResNet50'):
-    import jpeg4py as jpeg
-
     verbose = False
     class_name = os.path.basename(os.path.dirname(item))
     class_idx = get_class(class_name)
 
     validation = not training
 
-    img = jpeg.JPEG(item).decode()
+    try:
+        img = jpeg.JPEG(item).decode()
+    except:
+        print(item)
+        exit()
+
     shape = list(img.shape[:2])
 
     # discard images that do not have right resolution
