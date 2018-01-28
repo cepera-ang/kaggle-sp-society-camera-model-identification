@@ -111,14 +111,12 @@ def process_item(item, training, transforms=[[]], crop_size=512, classifier='Res
     import jpeg4py as jpeg
 
     verbose = False
-    load_img_fast_jpg = lambda img_path: jpeg.JPEG(img_path).decode()
     class_name = os.path.basename(os.path.dirname(item))
     class_idx = get_class(class_name)
 
     validation = not training
 
-    img = load_img_fast_jpg(item)
-
+    img = jpeg.JPEG(item).decode()
     shape = list(img.shape[:2])
 
     # discard images that do not have right resolution

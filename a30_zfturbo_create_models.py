@@ -62,14 +62,6 @@ parser.add_argument('-e', '--ensembling', type=str, default='arithmetic', help='
 parser.add_argument('-tta', action='store_true', help='Enable test time augmentation')
 
 args = parser.parse_args()
-
-TRAIN_FOLDER = '../input/train'
-EXTRA_TRAIN_FOLDER = '../input/flickr_images'
-NEW_TRAIN_FOLDER = '../input/flickr_new'
-TEST_FOLDER  = '../input/test'
-EXTRA_VAL_FOLDER = '../input/val_images'
-MODEL_FOLDER = '../models/'
-
 CROP_SIZE = args.crop_size
 
 for class_id, resolutions in RESOLUTIONS.copy().items():
@@ -96,7 +88,8 @@ def gen(items, batch_size, training=True):
     # class index
     y = np.empty((batch_size * valid_batch_factor), dtype=np.int64)
     
-    p = Pool(cpu_count()-2)
+    # p = Pool(cpu_count()-2)
+    p = Pool(1)
 
     transforms = VALIDATION_TRANSFORMS if validation else [[]]
 
@@ -111,7 +104,14 @@ def gen(items, batch_size, training=True):
         iter_items = iter(items)
         for item_batch in iter(lambda:list(islice(iter_items, batch_size)), []):
 
-            batch_results = p.map(process_item_func, item_batch)
+            if 0:
+                batch_results = p.map(process_item_func, item_batch)
+            else:
+                batch_results = []
+                for it in item_batch:
+                    b = process_item(it, training=training, transforms=transforms, crop_size=CROP_SIZE, classifier=args.classifier)
+                    batch_results.append(b)
+
             for batch_result in batch_results:
 
                 if batch_result is not None:
@@ -237,7 +237,7 @@ def create_models(nfolds):
 
         save_checkpoint2 = ModelCheckpoint(cache_model_path, monitor=monitor, save_best_only=True, verbose=0)
         save_checkpoint = ModelCheckpoint(
-                join(MODEL_FOLDER, model_name + "-fold_{}".format(num_fold) + "-epoch{epoch:03d}" + metric + ".hdf5"),
+                join(MODELS_PATH, model_name + "-fold_{}".format(num_fold) + "-epoch{epoch:03d}" + metric + ".hdf5"),
                 monitor=monitor,
                 verbose=0, save_best_only=True, save_weights_only=False, mode='max', period=1)
         reduce_lr = ReduceLROnPlateau(monitor=monitor, factor=0.5, patience=5, min_lr=1e-9, epsilon=0.00001, verbose=1, mode='max')
@@ -263,6 +263,13 @@ def create_models(nfolds):
                                                                                     now.strftime("%Y-%m-%d-%H-%M"))
         pd.DataFrame(history.history).to_csv(filename, index=False)
         save_history_figure(history, filename[:-4] + '.png')
+
+
+def test_1():
+    import jpeg4py as jpeg
+    a = jpeg.JPEG('../input/train\Samsung-Galaxy-Note3\(GalaxyN3)7.jpg').decode()
+    print(a)
+    exit()
 
 
 if __name__ == '__main__':
