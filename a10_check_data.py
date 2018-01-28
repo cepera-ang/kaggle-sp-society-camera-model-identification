@@ -1,9 +1,9 @@
 # coding: utf-8
 __author__ = 'ZFTurbo: https://kaggle.com/zfturbo'
 
-from zfturbo.a00_common_functions import *
-import shutil
 import hashlib
+
+from a00_common_functions import *
 
 
 def md5_from_file(fname):

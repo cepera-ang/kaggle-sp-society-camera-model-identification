@@ -22,19 +22,72 @@ random.seed(2016)
 np.random.seed(2016)
 
 
-INPUT_PATH = '../../input/'
-OUTPUT_PATH = '../../modified_data/'
+INPUT_PATH = '../input/'
+OUTPUT_PATH = '../modified_data/'
 if not os.path.isdir(OUTPUT_PATH):
     os.mkdir(OUTPUT_PATH)
-MODELS_PATH = '../../models/'
+MODELS_PATH = '../models/'
 if not os.path.isdir(MODELS_PATH):
     os.mkdir(MODELS_PATH)
-HISTORY_FOLDER_PATH = "../../models/history/"
+HISTORY_FOLDER_PATH = ".../models/history/"
 if not os.path.isdir(HISTORY_FOLDER_PATH):
     os.mkdir(HISTORY_FOLDER_PATH)
-SUBM_PATH = '../../subm/'
+SUBM_PATH = '../subm/'
 if not os.path.isdir(SUBM_PATH):
     os.mkdir(SUBM_PATH)
+
+
+CLASSES = [
+    'HTC-1-M7',
+    'iPhone-6',
+    'Motorola-Droid-Maxx',
+    'Motorola-X',
+    'Samsung-Galaxy-S4',
+    'iPhone-4s',
+    'LG-Nexus-5x',
+    'Motorola-Nexus-6',
+    'Samsung-Galaxy-Note3',
+    'Sony-NEX-7']
+
+EXTRA_CLASSES = [
+    'htc_m7',
+    'iphone_6',
+    'moto_maxx',
+    'moto_x',
+    'samsung_s4',
+    'iphone_4s',
+    'nexus_5x',
+    'nexus_6',
+    'samsung_note3',
+    'sony_nex7'
+]
+
+RESOLUTIONS = {
+    0: [[1520,2688]], # flips
+    1: [[3264,2448]], # no flips
+    2: [[2432,4320]], # flips
+    3: [[3120,4160]], # flips
+    4: [[4128,2322]], # no flips
+    5: [[3264,2448]], # no flips
+    6: [[3024,4032]], # flips
+    7: [[1040,780],  # Motorola-Nexus-6 no flips
+        [3088,4130], [3120,4160]], # Motorola-Nexus-6 flips
+    8: [[4128,2322]], # no flips
+    9: [[6000,4000]], # no flips
+}
+
+ORIENTATION_FLIP_ALLOWED = [
+    True,
+    False,
+    True,
+    True,
+    False,
+    False,
+    True,
+    True,
+    False,
+    False
+]
 
 
 def save_in_file(arr, file_name):
