@@ -690,6 +690,7 @@ else:
         
         if args.test_train:
             print("Accuracy: " + str(correct_predictions / len(ids)))
+            classes.append(prediction_class_idx)
 
         if args.test:
             print("Test set predictions distribution:")
