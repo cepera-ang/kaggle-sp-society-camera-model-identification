@@ -1,35 +1,36 @@
+# IEEE's Signal Processing Society - Camera Model Identification
+# https://www.kaggle.com/c/sp-society-camera-model-identification
+#
+# (C) 2018 Andres Torrubia, licensed under GNU General Public License v3.0
+# See license.txt
+
 import argparse
 import glob
 import numpy as np
 import pandas as pd
 import random
-from scipy.misc import imread, imsave
-from os.path import join
+from os.path import isfile, join
 from sklearn.model_selection import train_test_split
-from skimage.transform import rescale, downscale_local_mean
-import skimage.exposure
-import scipy.ndimage
+from sklearn.utils import class_weight
+
 from keras.optimizers import Adam, Adadelta, SGD
-from keras.losses import binary_crossentropy
-from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, LambdaCallback
-from keras.preprocessing.image import ImageDataGenerator
+from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from keras.models import load_model, Model
 from keras.layers import concatenate, Lambda, Input, Dense, Dropout, Flatten, Conv2D, MaxPooling2D, \
-        BatchNormalization, Activation, GlobalAveragePooling2D, SeparableConv2D, Reshape
-from keras.utils import to_categorical, Sequence
-from keras.initializers import Constant
+        BatchNormalization, Activation, GlobalAveragePooling2D, Reshape
+from keras.utils import to_categorical
 from keras.applications import *
-
-from multi_gpu_keras import multi_gpu_model
 from keras import backend as K
 from keras.engine.topology import Layer
+
+from multi_gpu_keras import multi_gpu_model
+
 import skimage
-from iterm import show_image
+
 from tqdm import tqdm
 from PIL import Image
 from io import BytesIO
 import copy
-
 import itertools
 import re
 import os
@@ -40,11 +41,11 @@ from scipy import signal
 import cv2
 import math
 import csv
-from sklearn.utils import class_weight
 from multiprocessing import Pool, cpu_count
 
 from functools import partial
 from itertools import  islice
+from conditional import conditional
 
 SEED = 42
 
@@ -55,7 +56,7 @@ random.seed(SEED)
 parser = argparse.ArgumentParser()
 parser.add_argument('--max-epoch', type=int, default=200, help='Epoch to run')
 parser.add_argument('-b', '--batch-size', type=int, default=16, help='Batch Size during training, e.g. -b 64')
-parser.add_argument('-l', '--learning_rate', type=float, default=1e-3, help='Initial learning rate')
+parser.add_argument('-l', '--learning_rate', type=float, default=1e-4, help='Initial learning rate')
 parser.add_argument('-m', '--model', help='load hdf5 model including weights (and continue training)')
 parser.add_argument('-w', '--weights', help='load hdf5 weights only (and continue training)')
 parser.add_argument('-do', '--dropout', type=float, default=0.3, help='Dropout rate for FC layers')
@@ -64,7 +65,7 @@ parser.add_argument('-t', '--test', action='store_true', help='Test model and ge
 parser.add_argument('-tt', '--test-train', action='store_true', help='Test model on the training set')
 parser.add_argument('-cs', '--crop-size', type=int, default=512, help='Crop size')
 parser.add_argument('-g', '--gpus', type=int, default=1, help='Number of GPUs to use')
-parser.add_argument('-p', '--pooling', type=str, default='avg', help='Type of pooling to use')
+parser.add_argument('-p', '--pooling', type=str, default='avg', help='Type of pooling to use: avg|max|none')
 parser.add_argument('-nfc', '--no-fcs', action='store_true', help='Dont add any FC at the end, just a softmax')
 parser.add_argument('-kf', '--kernel-filter', action='store_true', help='Apply kernel filter')
 parser.add_argument('-lkf', '--learn-kernel-filter', action='store_true', help='Add a trainable kernel filter before classifier')
@@ -72,6 +73,8 @@ parser.add_argument('-cm', '--classifier', type=str, default='ResNet50', help='B
 parser.add_argument('-uiw', '--use-imagenet-weights', action='store_true', help='Use imagenet weights (transfer learning)')
 parser.add_argument('-x', '--extra-dataset', action='store_true', help='Use dataset from https://www.kaggle.com/c/sp-society-camera-model-identification/discussion/47235')
 parser.add_argument('-v', '--verbose', action='store_true', help='Pring debug/verbose info')
+parser.add_argument('-e', '--ensembling', type=str, default='arithmetic', help='Type of ensembling: arithmetic|geometric for TTA')
+parser.add_argument('-tta', action='store_true', help='Enable test time augmentation')
 
 args = parser.parse_args()
 
@@ -124,6 +127,19 @@ RESOLUTIONS = {
     8: [[4128,2322]], # no flips 
     9: [[6000,4000]], # no flips
 }
+
+ORIENTATION_FLIP_ALLOWED = [
+    True,
+    False,
+    True,
+    True,
+    False,
+    False,
+    True,
+    True,
+    False,
+    False
+]
 
 for class_id,resolutions in RESOLUTIONS.copy().items():
     resolutions.extend([resolution[::-1] for resolution in resolutions])
@@ -273,6 +289,8 @@ def process_item(item, training, transforms=[[]]):
     if np.max(shape) < 2000:
         return None
     # some images may not be downloaded correclty and are B/W, discard those
+
+    # some images may not be downloaded correctly and are B/W, discard those
     if img.ndim != 3:
         return None
 
@@ -288,15 +306,25 @@ def process_item(item, training, transforms=[[]]):
     for transform in transforms:
 
         force_manipulation = 'manipulation' in transform
-        force_orientation  = 'orientation'  in transform
+
+        if ('orientation' in transform) and (ORIENTATION_FLIP_ALLOWED[class_idx] is False):
+            continue
+
+        force_orientation  = ('orientation'  in transform) and ORIENTATION_FLIP_ALLOWED[class_idx]
 
         # some images are landscape, others are portrait, so augment training by randomly changing orientation
-        if ((np.random.rand() < 0.5) and training) or force_orientation:
-            img = np.swapaxes(_img, 0,1)
+        if ((np.random.rand() < 0.5) and training and ORIENTATION_FLIP_ALLOWED[class_idx]) or force_orientation:
+            img = np.rot90(_img, 1, (0,1))
+            # is it rot90(..3..), rot90(..1..) or both?
+            # for phones with landscape mode pics could be taken upside down too, although less likely
+            # most of the test images that are flipped are 1
+            # however,eg. img_4d7be4c_unalt looks 3
+            # and img_4df3673_manip img_6a31fd7_unalt looks 2!
         else:
             img = _img
 
-        img = get_crop(img, CROP_SIZE * 2, random_crop=True if training else False) # * 2 bc may need to scale by 0.5x and still get a 512px crop
+        img = get_crop(img, CROP_SIZE * 2, random_crop=True if training else False)
+        # * 2 bc may need to scale by 0.5x and still get a 512px crop
 
         if args.verbose:
             print("om: ", img.shape, item)
@@ -328,7 +356,7 @@ def process_item(item, training, transforms=[[]]):
 
 VALIDATION_TRANSFORMS = [ [], ['orientation'], ['manipulation'], ['orientation','manipulation']]
 
-def gen(items, batch_size, training=True, inference=False):
+def gen(items, batch_size, training=True):
 
     validation = not training 
 
@@ -346,8 +374,6 @@ def gen(items, batch_size, training=True, inference=False):
     p = Pool(cpu_count()-2)
 
     transforms = VALIDATION_TRANSFORMS if validation else [[]]
-
-    assert batch_size % len(transforms) == 0
 
     while True:
 
@@ -371,6 +397,9 @@ def gen(items, batch_size, training=True, inference=False):
                         for _X,_O,_y in zip(*batch_result):
                             X[batch_idx], O[batch_idx], y[batch_idx] = _X,_O,_y
                             batch_idx += 1
+                            if batch_idx == batch_size:
+                                yield([X, O], [y])
+                                batch_idx = 0
 
                 if batch_idx == batch_size:
                     yield([X, O], [y])
@@ -378,14 +407,17 @@ def gen(items, batch_size, training=True, inference=False):
 
 
 # MAIN
-
 if args.model:
     print("Loading model " + args.model)
 
     model = load_model(args.model, compile=False)
-    match = re.search(r'([A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.model)
+    # e.g. DenseNet201_do0.3_doc0.0_avg-epoch128-val_acc0.964744.hdf5
+    match = re.search(r'(([a-zA-Z0-9]+)_[A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.model)
     model_name = match.group(1)
-    last_epoch = int(match.group(2))
+    args.classifier = match.group(2)
+    CROP_SIZE = args.crop_size  = model.get_input_shape_at(0)[0][1]
+    print("Overriding classifier: {} and crop size: {}".format(args.classifier, args.crop_size))
+    last_epoch = int(match.group(3))
 else:
     last_epoch = 0
 
@@ -420,20 +452,27 @@ else:
         ('_kf' if args.kernel_filter else '') + \
         ('_lkf' if args.learn_kernel_filter else '') + \
         '_do' + str(args.dropout) + \
+        '_doc' + str(args.dropout_classifier) + \
         '_' + args.pooling
 
     if args.weights:
-            model.load_weights(args.weights, by_name=True)
+            model.load_weights(args.weights, by_name=True, skip_mismatch=True)
             match = re.search(r'([A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.weights)
-            #model_name = match.group(1)
             last_epoch = int(match.group(2))
+
+def print_distribution(ids, classes=None):
+    if classes is None:
+        classes = [get_class(idx.split('/')[-2]) for idx in ids]
+    classes_count = np.bincount(classes)
+    for class_name, class_count in zip(CLASSES, classes_count):
+        print('{:>22}: {:5d} ({:04.1f}%)'.format(class_name, class_count, 100. * class_count / len(classes)))
 
 model.summary()
 model = multi_gpu_model(model, gpus=args.gpus)
 
 if not (args.test or args.test_train):
-    # TRAINING
 
+    # TRAINING
     ids = glob.glob(join(TRAIN_FOLDER,'*/*.jpg'))
     ids.sort()
 
@@ -451,41 +490,68 @@ if not (args.test or args.test_train):
         extra_val_ids.sort()
         ids_val.extend(extra_val_ids)
 
-    classes = [get_class(idx.split('/')[-2]) for idx in ids_train]
+        classes_val = [get_class(idx.split('/')[-2]) for idx in ids_val]
+        classes_val_count = np.bincount(classes_val)
+        max_classes_val_count = max(classes_val_count)
 
-    classes_count = np.bincount(classes)
-    for class_name, class_count in zip(CLASSES, classes_count):
-        print('{:>22}: {:5d} ({:04.1f}%)'.format(class_name, class_count, 100. * class_count / len(classes)))
+        # Balance validation dataset by filling up classes with less items from training set (and removing those from there)
+        for class_idx in range(N_CLASSES):
+            idx_to_transfer = [idx for idx in ids_train \
+                if get_class(idx.split('/')[-2]) == class_idx][:max_classes_val_count-classes_val_count[class_idx]]
 
-    class_weight = class_weight.compute_class_weight('balanced', np.unique(classes), classes)
+            ids_train = list(set(ids_train).difference(set(idx_to_transfer)))
+
+            ids_val.extend(idx_to_transfer)
+
+        new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
+        #p = Pool(cpu_count() - 2)
+        #p.map(check_remove_broken, tqdm(new_train_ids))
+        #new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
+        ids_train.extend(new_train_ids)
+
+        random.shuffle(ids_train)
+        random.shuffle(ids_val)
+
+    print("Training set distribution:")
+    print_distribution(ids_train)
+
+    print("Validation set distribution:")
+    print_distribution(ids_val)
+
+    classes_train = [get_class(idx.split('/')[-2]) for idx in ids_train]
+    class_weight = class_weight.compute_class_weight('balanced', np.unique(classes_train), classes_train)
 
     opt = Adam(lr=args.learning_rate)
     #opt = SGD(lr=args.learning_rate, decay=1e-6, momentum=0.9, nesterov=True)
 
+    # TODO: implement this correctly.
+    def weighted_loss(weights):
+        def loss(y_true, y_pred):
+            return K.mean(K.square(y_pred - y_true) - K.square(y_true - noise), axis=-1)
+        return loss
+
     model.compile(optimizer=opt, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
-    if True:
-        metric  = "-val_acc{val_acc:.6f}"
-        monitor = 'val_acc'
+    metric  = "-val_acc{val_acc:.6f}"
+    monitor = 'val_acc'
 
-        save_checkpoint = ModelCheckpoint(
-                join(MODEL_FOLDER, model_name+"-epoch{epoch:03d}"+metric+".hdf5"),
-                monitor=monitor,
-                verbose=0,  save_best_only=True, save_weights_only=False, mode='max', period=1)
+    save_checkpoint = ModelCheckpoint(
+            join(MODEL_FOLDER, model_name+"-epoch{epoch:03d}"+metric+".hdf5"),
+            monitor=monitor,
+            verbose=0,  save_best_only=True, save_weights_only=False, mode='max', period=1)
 
-        reduce_lr = ReduceLROnPlateau(monitor=monitor, factor=0.5, patience=10, min_lr=1e-9, epsilon = 0.00001, verbose=1, mode='max')
-        print(int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)))
-        print(len(VALIDATION_TRANSFORMS), len(ids_val), args.batch_size)
-        model.fit_generator(
-                generator        = gen(ids_train, args.batch_size),
-                steps_per_epoch  = int(math.ceil(len(ids_train)  // args.batch_size)),
-                validation_data  = gen(ids_val, args.batch_size, training = False),
-                validation_steps = int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)),
-                epochs = args.max_epoch,
-                callbacks = [save_checkpoint, reduce_lr],
-                initial_epoch = last_epoch,
-                max_queue_size = 10,
-                class_weight=class_weight)
+    reduce_lr = ReduceLROnPlateau(monitor=monitor, factor=0.5, patience=5, min_lr=1e-9, epsilon = 0.00001, verbose=1, mode='max')
+
+    model.fit_generator(
+            generator        = gen(ids_train, args.batch_size),
+            steps_per_epoch  = int(math.ceil(len(ids_train)  // args.batch_size)),
+            validation_data  = gen(ids_val, args.batch_size, training = False),
+            validation_steps = int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)),
+            epochs = args.max_epoch,
+            callbacks = [save_checkpoint, reduce_lr],
+            initial_epoch = last_epoch,
+            max_queue_size = 10,
+            class_weight=class_weight)
 
 else:
     # TEST
@@ -573,4 +639,10 @@ else:
         
         if args.test_train:
             print("Accuracy: " + str(correct_predictions / len(ids)))
-                
+            classes.append(prediction_class_idx)
+
+        if args.test:
+            print("Test set predictions distribution:")
+            print_distribution(None, classes=classes)
+            print("Now you are ready to:")
+            print("kg submit {}".format(csv_name))
