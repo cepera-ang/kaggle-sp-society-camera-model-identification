@@ -9,24 +9,13 @@ if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
 
 
-from a00_common_functions import *
 from a01_random_augmentations import *
+from keras.applications import *
 import argparse
-import glob
 import numpy as np
 import random
 from os.path import isfile, join
-from sklearn.model_selection import train_test_split
 from sklearn.utils import class_weight
-from keras.applications import *
-
-
-from keras.optimizers import Adam, Adadelta, SGD
-from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
-from keras.models import load_model, Model
-from keras.layers import concatenate, Lambda, Input, Dense, Dropout, Flatten, Conv2D, MaxPooling2D, \
-        BatchNormalization, Activation, GlobalAveragePooling2D, Reshape
-from multi_gpu_keras import multi_gpu_model
 
 from PIL import Image
 import re
@@ -87,9 +76,10 @@ def gen(items, batch_size, training=True):
 
     # class index
     y = np.empty((batch_size * valid_batch_factor), dtype=np.int64)
-    
-    # p = Pool(cpu_count()-2)
-    p = Pool(1)
+
+    if 0:
+        # p = Pool(cpu_count()-2)
+        p = Pool(1)
 
     transforms = VALIDATION_TRANSFORMS if validation else [[]]
 
@@ -98,7 +88,8 @@ def gen(items, batch_size, training=True):
         if training:
             random.shuffle(items)
 
-        process_item_func = partial(process_item, training=training, transforms=transforms, crop_size=CROP_SIZE, classifier=args.classifier)
+        if 0:
+            process_item_func = partial(process_item, training=training, transforms=transforms, crop_size=CROP_SIZE, classifier=args.classifier)
 
         batch_idx = 0
         iter_items = iter(items)
@@ -140,6 +131,17 @@ def print_distribution(ids, classes=None):
 
 
 def create_models(nfolds):
+    # from keras.applications import ResNet50
+
+
+    from keras.optimizers import Adam, Adadelta, SGD
+    from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
+    from keras.models import load_model, Model
+    from keras.layers import concatenate, Lambda, Input, Dense, Dropout, Flatten, Conv2D, MaxPooling2D, \
+        BatchNormalization, Activation, GlobalAveragePooling2D, Reshape
+    from multi_gpu_keras import multi_gpu_model
+
+
     global model, CROP_SIZE
 
     # MAIN
@@ -160,9 +162,9 @@ def create_models(nfolds):
         input_image = Input(shape=(CROP_SIZE, CROP_SIZE, 3))
         manipulated = Input(shape=(1,))
 
-        classifier = globals()[args.classifier]
+        # classifier = globals()[args.classifier]
 
-        classifier_model = classifier(
+        classifier_model = ResNet50(
             include_top=False,
             weights='imagenet' if args.use_imagenet_weights else None,
             input_shape=(CROP_SIZE, CROP_SIZE, 3),
@@ -250,7 +252,9 @@ def create_models(nfolds):
                 epochs=args.max_epoch,
                 callbacks=[save_checkpoint, save_checkpoint2, reduce_lr],
                 initial_epoch=last_epoch,
-                max_queue_size=10,
+                max_queue_size=1,
+                use_multiprocessing=False,
+                workers=1,
                 class_weight=class_weight1)
 
         max_acc = max(history.history[monitor])
@@ -283,7 +287,7 @@ def test_1():
 
 
 if __name__ == '__main__':
-    test_1()
+    # test_1()
     start_time = time.time()
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))

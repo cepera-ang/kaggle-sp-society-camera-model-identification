@@ -7,15 +7,7 @@ from io import BytesIO
 from PIL import Image
 import math
 
-
 MANIPULATIONS = ['jpg70', 'jpg90', 'gamma0.8', 'gamma1.2', 'bicubic0.5', 'bicubic0.8', 'bicubic1.5', 'bicubic2.0']
-
-def check_remove_broken(img_path):
-    try:
-        x = jpeg.JPEG(img_path).decode()
-    except Exception:
-        print('Decoding error:', img_path)
-        os.remove(img_path)
 
 
 def get_crop(img, crop_size, random_crop=False):
@@ -113,11 +105,15 @@ def process_item(item, training, transforms=[[]], crop_size=512, classifier='Res
 
     validation = not training
 
-    try:
-        img = jpeg.JPEG(item).decode()
-    except:
-        print(item)
-        exit()
+    if 0:
+        jpg_item = jpeg.JPEG(item)
+        print(item, jpg_item)
+        img = jpg_item.decode()
+    else:
+        img = cv2.imread(item)
+        img = np.transpose(img, (1, 0, 2))
+        img = np.flip(img, axis=0)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     shape = list(img.shape[:2])
 
