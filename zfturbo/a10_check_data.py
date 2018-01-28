@@ -33,7 +33,9 @@ def find_duplicates(path):
     duplicate_count = 0
     for el in all_hashes:
         if len(all_hashes[el]) > 1:
-            print('Duplicate found. count: {}: {}'.format(len(all_hashes[el]), all_hashes[el][0]))
+            print('Duplicate found. Count: {}. List below'.format(len(all_hashes[el])))
+            for item in all_hashes[el]:
+                print(item)
             duplicate_count += (len(all_hashes[el]) - 1)
     print('Total duplicates found: {}'.format(duplicate_count))
 
