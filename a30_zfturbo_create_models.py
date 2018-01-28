@@ -4,7 +4,6 @@ from a00_common_functions import *
 import argparse
 import glob
 import numpy as np
-import pandas as pd
 import random
 from os.path import isfile, join
 from sklearn.model_selection import train_test_split
@@ -15,38 +14,19 @@ from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from keras.models import load_model, Model
 from keras.layers import concatenate, Lambda, Input, Dense, Dropout, Flatten, Conv2D, MaxPooling2D, \
         BatchNormalization, Activation, GlobalAveragePooling2D, Reshape
-from keras.utils import to_categorical
-from keras.applications import *
-from keras import backend as K
-from keras.engine.topology import Layer
-
 from multi_gpu_keras import multi_gpu_model
 
-import skimage
-
-from tqdm import tqdm
 from PIL import Image
 from io import BytesIO
-import copy
-import itertools
 import re
 import os
-import sys
 import jpeg4py as jpeg
-from scipy import signal
 import cv2
 import math
-import csv
 from multiprocessing import Pool, cpu_count
-
 from functools import partial
 from itertools import  islice
-from conditional import conditional
 
-SEED = 42
-np.random.seed(SEED)
-random.seed(SEED)
-# TODO tf seed
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--max-epoch', type=int, default=200, help='Epoch to run')
@@ -87,6 +67,7 @@ for class_id, resolutions in RESOLUTIONS.copy().items():
     RESOLUTIONS[class_id] = resolutions
 
 MANIPULATIONS = ['jpg70', 'jpg90', 'gamma0.8', 'gamma1.2', 'bicubic0.5', 'bicubic0.8', 'bicubic1.5', 'bicubic2.0']
+VALIDATION_TRANSFORMS = [[], ['orientation'], ['manipulation'], ['orientation', 'manipulation']]
 
 N_CLASSES = len(CLASSES)
 load_img_fast_jpg  = lambda img_path: jpeg.JPEG(img_path).decode()
@@ -279,9 +260,6 @@ def process_item(item, training, transforms=[[]]):
         return img_s, manipulated_s, class_idx_s
 
 
-VALIDATION_TRANSFORMS = [[], ['orientation'], ['manipulation'], ['orientation','manipulation']]
-
-
 def gen(items, batch_size, training=True):
 
     validation = not training 
@@ -306,7 +284,7 @@ def gen(items, batch_size, training=True):
         if training:
             random.shuffle(items)
 
-        process_item_func  = partial(process_item, training=training, transforms=transforms)
+        process_item_func = partial(process_item, training=training, transforms=transforms)
 
         batch_idx = 0
         iter_items = iter(items)
@@ -332,135 +310,6 @@ def gen(items, batch_size, training=True):
                     batch_idx = 0
 
 
-def SmallNet(include_top, weights, input_shape, pooling):
-    img_input = Input(shape=input_shape)
-
-    x = Conv2D(64, (3, 3), strides=(2,2), padding='valid', name='conv1')(img_input)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Conv2D(64, (3, 3), strides=(2,2), padding='valid', name='conv2')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Conv2D(32, (3, 3), strides=(1,1), padding='valid', name='conv3')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = MaxPooling2D(pool_size=(3, 3), strides=(2,2), padding='valid')(x)
-
-    model = Model(img_input, x, name='smallnet')
-
-    return model
-
-
-# see https://arxiv.org/pdf/1703.04856.pdf
-def CaCNN(include_top, weights, input_shape, pooling):
-
-    img_input = Input(shape=input_shape)
-
-    def CaCNNBlock(x, preffix=''):
-        x = Conv2D(  8, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv1')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D( 16, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv2')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D( 32, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv3')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D( 64, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv4')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D(128, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv5')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = GlobalAveragePooling2D(name=preffix+'pooling')(x)  
-        
-        return x
-
-    x = img_input
-
-    x1 = Conv2D(3, (3, 3), use_bias=False, padding='valid', name='filter1')(x)
-    x1 = BatchNormalization()(x1)
-    x1 = CaCNNBlock(x1, preffix='block1')
-
-    x2 = Conv2D(3, (5, 5), use_bias=False, padding='valid', name='filter2')(x)
-    x2 = BatchNormalization()(x2)
-    x2 = CaCNNBlock(x2, preffix='block2')
-
-    x3 = Conv2D(3, (7, 7), use_bias=False, padding='valid', name='filter3')(x)
-    x3 = BatchNormalization()(x3)
-    x3 = CaCNNBlock(x3, preffix='block3')
-
-    x = concatenate([x1,x2,x3])
-
-    model = Model(img_input, x, name='cacnn')
-
-    model.summary()
-
-    return model
-
-# MAIN
-if args.model:
-    print("Loading model " + args.model)
-
-    model = load_model(args.model, compile=False)
-    # e.g. DenseNet201_do0.3_doc0.0_avg-epoch128-val_acc0.964744.hdf5
-    match = re.search(r'(([a-zA-Z0-9]+)_[A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.model)
-    model_name = match.group(1)
-    args.classifier = match.group(2)
-    CROP_SIZE = args.crop_size  = model.get_input_shape_at(0)[0][1]
-    print("Overriding classifier: {} and crop size: {}".format(args.classifier, args.crop_size))
-    last_epoch = int(match.group(3))
-else:
-    last_epoch = 0
-
-    input_image = Input(shape=(CROP_SIZE, CROP_SIZE, 3))
-    manipulated = Input(shape=(1,))
-
-    classifier = globals()[args.classifier]
-
-    classifier_model = classifier(
-        include_top=False, 
-        weights = 'imagenet' if args.use_imagenet_weights else None,
-        input_shape=(CROP_SIZE, CROP_SIZE, 3), 
-        pooling=args.pooling if args.pooling != 'none' else None)
-
-    x = input_image
-    if args.learn_kernel_filter:
-        x = Conv2D(3, (7, 7), strides=(1,1), use_bias=False, padding='valid', name='filtering')(x)
-    x = classifier_model(x)
-    x = Reshape((-1,))(x)
-    if args.dropout_classifier != 0.:
-        x = Dropout(args.dropout_classifier, name='dropout_classifier')(x)
-    x = concatenate([x, manipulated])
-    if not args.no_fcs:
-        x = Dense(512, activation='relu', name='fc1')(x)
-        x = Dropout(args.dropout,         name='dropout_fc1')(x)
-        x = Dense(128, activation='relu', name='fc2')(x)
-        x = Dropout(args.dropout,         name='dropout_fc2')(x)
-    prediction = Dense(N_CLASSES, activation ="softmax", name="predictions")(x)
-
-    model = Model(inputs=(input_image, manipulated), outputs=prediction)
-    model_name = args.classifier + \
-        ('_kf' if args.kernel_filter else '') + \
-        ('_lkf' if args.learn_kernel_filter else '') + \
-        '_do' + str(args.dropout) + \
-        '_doc' + str(args.dropout_classifier) + \
-        '_' + args.pooling
-
-    if args.weights:
-            model.load_weights(args.weights, by_name=True, skip_mismatch=True)
-            match = re.search(r'([A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.weights)
-            last_epoch = int(match.group(2))
-
-
 def print_distribution(ids, classes=None):
     if classes is None:
         classes = [get_class(idx.split('/')[-2]) for idx in ids]
@@ -468,13 +317,69 @@ def print_distribution(ids, classes=None):
     for class_name, class_count in zip(CLASSES, classes_count):
         print('{:>22}: {:5d} ({:04.1f}%)'.format(class_name, class_count, 100. * class_count / len(classes)))
 
-model.summary()
-model = multi_gpu_model(model, gpus=args.gpus)
 
-if not (args.test or args.test_train):
+def create_models(nfolds):
+    global model, CROP_SIZE
+
+    # MAIN
+    if args.model:
+        print("Loading model " + args.model)
+
+        model = load_model(args.model, compile=False)
+        # e.g. DenseNet201_do0.3_doc0.0_avg-epoch128-val_acc0.964744.hdf5
+        match = re.search(r'(([a-zA-Z0-9]+)_[A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.model)
+        model_name = match.group(1)
+        args.classifier = match.group(2)
+        CROP_SIZE = args.crop_size = model.get_input_shape_at(0)[0][1]
+        print("Overriding classifier: {} and crop size: {}".format(args.classifier, args.crop_size))
+        last_epoch = int(match.group(3))
+    else:
+        last_epoch = 0
+
+        input_image = Input(shape=(CROP_SIZE, CROP_SIZE, 3))
+        manipulated = Input(shape=(1,))
+
+        classifier = globals()[args.classifier]
+
+        classifier_model = classifier(
+            include_top=False,
+            weights='imagenet' if args.use_imagenet_weights else None,
+            input_shape=(CROP_SIZE, CROP_SIZE, 3),
+            pooling=args.pooling if args.pooling != 'none' else None)
+
+        x = input_image
+        if args.learn_kernel_filter:
+            x = Conv2D(3, (7, 7), strides=(1, 1), use_bias=False, padding='valid', name='filtering')(x)
+        x = classifier_model(x)
+        x = Reshape((-1,))(x)
+        if args.dropout_classifier != 0.:
+            x = Dropout(args.dropout_classifier, name='dropout_classifier')(x)
+        x = concatenate([x, manipulated])
+        if not args.no_fcs:
+            x = Dense(512, activation='relu', name='fc1')(x)
+            x = Dropout(args.dropout, name='dropout_fc1')(x)
+            x = Dense(128, activation='relu', name='fc2')(x)
+            x = Dropout(args.dropout, name='dropout_fc2')(x)
+        prediction = Dense(N_CLASSES, activation="softmax", name="predictions")(x)
+
+        model = Model(inputs=(input_image, manipulated), outputs=prediction)
+        model_name = args.classifier + \
+                     ('_kf' if args.kernel_filter else '') + \
+                     ('_lkf' if args.learn_kernel_filter else '') + \
+                     '_do' + str(args.dropout) + \
+                     '_doc' + str(args.dropout_classifier) + \
+                     '_' + args.pooling
+
+        if args.weights:
+            model.load_weights(args.weights, by_name=True, skip_mismatch=True)
+            match = re.search(r'([A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.weights)
+            last_epoch = int(match.group(2))
+
+    model.summary()
+    model = multi_gpu_model(model, gpus=args.gpus)
 
     # TRAINING
-    ids = glob.glob(join(TRAIN_FOLDER,'*/*.jpg'))
+    ids = glob.glob(join(TRAIN_FOLDER, '*/*.jpg'))
     ids.sort()
 
     if not args.extra_dataset:
@@ -526,17 +431,9 @@ if not (args.test or args.test_train):
     print_distribution(ids_val)
 
     classes_train = [get_class(idx.split('/')[-2]) for idx in ids_train]
-    class_weight = class_weight.compute_class_weight('balanced', np.unique(classes_train), classes_train)
+    class_weight1 = class_weight.compute_class_weight('balanced', np.unique(classes_train), classes_train)
 
     opt = Adam(lr=args.learning_rate)
-    #opt = SGD(lr=args.learning_rate, decay=1e-6, momentum=0.9, nesterov=True)
-
-    # TODO: implement this correctly.
-    def weighted_loss(weights):
-        def loss(y_true, y_pred):
-            return K.mean(K.square(y_pred - y_true) - K.square(y_true - noise), axis=-1)
-        return loss
-
     model.compile(optimizer=opt, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
     metric  = "-val_acc{val_acc:.6f}"
@@ -544,25 +441,23 @@ if not (args.test or args.test_train):
 
     save_checkpoint = ModelCheckpoint(
             join(MODEL_FOLDER, model_name+"-epoch{epoch:03d}"+metric+".hdf5"),
-            monitor=monitor,
+            monitor = monitor,
             verbose=0,  save_best_only=True, save_weights_only=False, mode='max', period=1)
-
     reduce_lr = ReduceLROnPlateau(monitor=monitor, factor=0.5, patience=5, min_lr=1e-9, epsilon = 0.00001, verbose=1, mode='max')
 
     model.fit_generator(
             generator        = gen(ids_train, args.batch_size),
             steps_per_epoch  = int(math.ceil(len(ids_train)  // args.batch_size)),
-            validation_data  = gen(ids_val, args.batch_size, training = False),
+            validation_data  = gen(ids_val, args.batch_size, training=False),
             validation_steps = int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)),
             epochs = args.max_epoch,
             callbacks = [save_checkpoint, reduce_lr],
             initial_epoch = last_epoch,
             max_queue_size = 10,
-            class_weight=class_weight)
+            class_weight=class_weight1)
 
 
 if __name__ == '__main__':
     start_time = time.time()
-    print('Reading data in memory complete!')
-    score = create_models_seg_vgg16(4)
+    create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))

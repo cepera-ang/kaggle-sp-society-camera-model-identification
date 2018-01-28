@@ -90,6 +90,26 @@ ORIENTATION_FLIP_ALLOWED = [
 ]
 
 
+def get_kfold_split(num_folds=4):
+    cache_path = OUTPUT_PATH + 'kfold_split_{}.pklz'.format(num_folds)
+
+    if not os.path.isfile(cache_path):
+        files = glob.glob(os.path.join(INPUT_PATH, 'train/*/*.jpg')) + \
+              glob.glob(os.path.join(INPUT_PATH, 'flickr/*/*.jpg'))
+
+        kf = KFold(n_splits=num_folds, shuffle=True, random_state=66)
+        files = np.array(files)
+        ret = []
+        for train_index, test_index in kf.split(range(len(files))):
+            train_files = files[train_index]
+            test_files = files[test_index]
+            ret.append((train_files, test_files))
+        save_in_file(ret, cache_path)
+    else:
+        ret = load_from_file(cache_path)
+    return ret
+
+
 def save_in_file(arr, file_name):
     pickle.dump(arr, gzip.open(file_name, 'wb+', compresslevel=3))
 
