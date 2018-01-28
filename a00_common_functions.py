@@ -142,3 +142,11 @@ def value_counts_for_list(lst):
     a = dict(Counter(lst))
     a = sort_dict_by_values(a, True)
     return a
+
+
+def save_history_figure(history, path, columns=('acc', 'val_acc')):
+    import matplotlib.pyplot as plt
+    s = pd.DataFrame(history.history)
+    plt.plot(s[list(columns)])
+    plt.savefig(path)
+    plt.close()

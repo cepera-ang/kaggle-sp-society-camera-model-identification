@@ -17,6 +17,8 @@ import random
 from os.path import isfile, join
 from sklearn.model_selection import train_test_split
 from sklearn.utils import class_weight
+from keras.applications import *
+
 
 from keras.optimizers import Adam, Adadelta, SGD
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
@@ -385,85 +387,69 @@ def create_models(nfolds):
             last_epoch = int(match.group(2))
 
     model.summary()
-    model = multi_gpu_model(model, gpus=args.gpus)
+    # model = multi_gpu_model(model, gpus=args.gpus)
 
     # TRAINING
-    ids = glob.glob(join(TRAIN_FOLDER, '*/*.jpg'))
-    ids.sort()
+    num_fold = 0
+    kfold_split = get_kfold_split(nfolds)
+    for ids_train, ids_val in kfold_split:
+        num_fold += 1
+        print('Train files: {}'.format(len(ids_train)))
+        print('Valid files: {}'.format(len(ids_val)))
 
-    if not args.extra_dataset:
-        ids_train, ids_val = train_test_split(ids, test_size=0.1, random_state=2018)
-    else:
-        ids_train = ids
-        ids_val   = [ ]
+        if 'FOLD_TO_CALC' in globals():
+            if num_fold not in FOLD_TO_CALC:
+                continue
 
-        extra_train_ids = [os.path.join(EXTRA_TRAIN_FOLDER,line.rstrip('\n')) \
-            for line in open(os.path.join(EXTRA_TRAIN_FOLDER, 'good_jpgs'))]
-        low_quality =     [os.path.join(EXTRA_TRAIN_FOLDER,line.rstrip('\n').split(' ')[0]) \
-            for line in open(os.path.join(EXTRA_TRAIN_FOLDER, 'low-quality'))]
-        extra_train_ids = [idx for idx in extra_train_ids if idx not in low_quality]
-        #extra_train_ids = [c for c in extra_train_ids if isfile(c)]
-        extra_train_ids.sort()
-        ids_train.extend(extra_train_ids)
-        random.shuffle(ids_train)
-
-        extra_val_ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
-        extra_val_ids.sort()
-        ids_val.extend(extra_val_ids)
-
-        classes_val = [get_class(idx.split('/')[-2]) for idx in ids_val]
-        classes_val_count = np.bincount(classes_val)
-        max_classes_val_count = max(classes_val_count)
-
-        # Balance validation dataset by filling up classes with less items from training set (and removing those from there)
-        for class_idx in range(N_CLASSES):
-            idx_to_transfer = [idx for idx in ids_train \
-                if get_class(idx.split('/')[-2]) == class_idx][:max_classes_val_count-classes_val_count[class_idx]]
-
-            ids_train = list(set(ids_train).difference(set(idx_to_transfer)))
-
-            ids_val.extend(idx_to_transfer)
-        
-        new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
-        #p = Pool(cpu_count() - 2)
-        #p.map(check_remove_broken, tqdm(new_train_ids))
-        #new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
-        ids_train.extend(new_train_ids)
-        
         random.shuffle(ids_train)
         random.shuffle(ids_val)
 
-    print("Training set distribution:")
-    print_distribution(ids_train)
+        print("Training set distribution:")
+        print_distribution(ids_train)
 
-    print("Validation set distribution:")
-    print_distribution(ids_val)
+        print("Validation set distribution:")
+        print_distribution(ids_val)
 
-    classes_train = [get_class(idx.split('/')[-2]) for idx in ids_train]
-    class_weight1 = class_weight.compute_class_weight('balanced', np.unique(classes_train), classes_train)
+        classes_train = [get_class(idx.split('/')[-2]) for idx in ids_train]
+        class_weight1 = class_weight.compute_class_weight('balanced', np.unique(classes_train), classes_train)
 
-    opt = Adam(lr=args.learning_rate)
-    model.compile(optimizer=opt, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+        opt = Adam(lr=args.learning_rate)
+        model.compile(optimizer=opt, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
-    metric  = "-val_acc{val_acc:.6f}"
-    monitor = 'val_acc'
+        metric  = "-val_acc{val_acc:.6f}"
+        monitor = 'val_acc'
 
-    save_checkpoint = ModelCheckpoint(
-            join(MODEL_FOLDER, model_name+"-epoch{epoch:03d}"+metric+".hdf5"),
-            monitor = monitor,
-            verbose=0,  save_best_only=True, save_weights_only=False, mode='max', period=1)
-    reduce_lr = ReduceLROnPlateau(monitor=monitor, factor=0.5, patience=5, min_lr=1e-9, epsilon = 0.00001, verbose=1, mode='max')
+        final_model_path = MODELS_PATH + '{}_fold_{}.h5'.format(args.classifier, num_fold)
+        cache_model_path = MODELS_PATH + '{}_temp_fold_{}.h5'.format(args.classifier, num_fold)
 
-    model.fit_generator(
-            generator        = gen(ids_train, args.batch_size),
-            steps_per_epoch  = int(math.ceil(len(ids_train)  // args.batch_size)),
-            validation_data  = gen(ids_val, args.batch_size, training=False),
-            validation_steps = int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)),
-            epochs = args.max_epoch,
-            callbacks = [save_checkpoint, reduce_lr],
-            initial_epoch = last_epoch,
-            max_queue_size = 10,
-            class_weight=class_weight1)
+        save_checkpoint2 = ModelCheckpoint(cache_model_path, monitor=monitor, save_best_only=True, verbose=0),
+        save_checkpoint = ModelCheckpoint(
+                join(MODEL_FOLDER, model_name + "-fold_{}".format(num_fold) + "-epoch{epoch:03d}" + metric + ".hdf5"),
+                monitor=monitor,
+                verbose=0, save_best_only=True, save_weights_only=False, mode='max', period=1)
+        reduce_lr = ReduceLROnPlateau(monitor=monitor, factor=0.5, patience=5, min_lr=1e-9, epsilon=0.00001, verbose=1, mode='max')
+
+        history = model.fit_generator(
+                generator        = gen(ids_train, args.batch_size),
+                steps_per_epoch  = int(math.ceil(len(ids_train)  // args.batch_size)),
+                validation_data  = gen(ids_val, args.batch_size, training=False),
+                validation_steps = int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)),
+                epochs=args.max_epoch,
+                callbacks=[save_checkpoint, save_checkpoint2, reduce_lr],
+                initial_epoch=last_epoch,
+                max_queue_size=10,
+                class_weight=class_weight1)
+
+        max_acc = max(history.history[monitor])
+        print('Maximum acc for fold {}: {} [Ep: {}]'.format(num_fold, max_acc, len(history.history[monitor])))
+        model.load_weights(cache_model_path)
+        model.save(final_model_path)
+        now = datetime.datetime.now()
+        filename = HISTORY_FOLDER_PATH + 'history_{}_{}_{:.4f}_lr_{}_{}.csv'.format(args.classifier, num_fold, max_acc,
+                                                                                    args.learning_rate,
+                                                                                    now.strftime("%Y-%m-%d-%H-%M"))
+        pd.DataFrame(history.history).to_csv(filename, index=False)
+        save_history_figure(history, filename[:-4] + '.png')
 
 
 if __name__ == '__main__':
