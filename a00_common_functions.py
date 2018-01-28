@@ -48,6 +48,7 @@ CLASSES = [
     'Motorola-Nexus-6',
     'Samsung-Galaxy-Note3',
     'Sony-NEX-7']
+N_CLASSES = len(CLASSES)
 
 EXTRA_CLASSES = [
     'htc_m7',
@@ -150,3 +151,16 @@ def save_history_figure(history, path, columns=('acc', 'val_acc')):
     plt.plot(s[list(columns)])
     plt.savefig(path)
     plt.close()
+
+
+def get_class(class_name):
+    global CLASSES
+    if class_name in CLASSES:
+        class_idx = CLASSES.index(class_name)
+    elif class_name in EXTRA_CLASSES:
+        class_idx = EXTRA_CLASSES.index(class_name)
+    else:
+        print(class_name)
+        assert False
+    assert class_idx in range(N_CLASSES)
+    return class_idx
