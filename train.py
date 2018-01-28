@@ -75,13 +75,15 @@ parser.add_argument('-v', '--verbose', action='store_true', help='Pring debug/ve
 
 args = parser.parse_args()
 
-TRAIN_FOLDER       = 'train'
-EXTRA_TRAIN_FOLDER = 'flickr_images'
-NEW_TRAIN_FOLDER = '../input/flickr_new'
-EXTRA_VAL_FOLDER   = 'val_images'
-TEST_FOLDER        = 'test'
-MODEL_FOLDER       = 'models'
-SUBMITS_FOLDER = 'submits'
+TRAIN_FOLDER       = '../input/train'
+EXTRA_TRAIN_FOLDER = '../input/flickr_images'
+NEW_TRAIN_FOLDER   = '../input/flickr_new'
+EXTRA_MOTOX_FOLDER = '../input/moto_x_all'
+EXTRA_VAL_FOLDER   = '../input/val_images'
+TEST_FOLDER        = '../input/test'
+MODEL_FOLDER       = '../output/models'
+SUBMITS_FOLDER     = '../output/submits'
+PROBS_FOLDER       = '../output/probs'
 
 CROP_SIZE = args.crop_size
 CLASSES = [
@@ -148,6 +150,16 @@ def check_remove_broken(img_path):
     except Exception:
         print('Decoding error:', img_path)
         os.remove(img_path)
+
+
+def check_load_ids(train_folder):
+    ids = glob.glob(join(train_folder, '*/*.jpg'))
+    print('Checking files in {} folder'.format(train_folder))
+    p = Pool(cpu_count() - 2)
+    p.map(check_remove_broken, tqdm(ids))
+    ids = glob.glob(join(train_folder, '*/*.jpg'))
+    return ids
+
 
 def random_manipulation(img, manipulation=None):
 
@@ -254,10 +266,12 @@ def process_item(item, training, transforms=[[]]):
 
     shape = list(img.shape[:2])
 
-    # discard images that do not have right resolution
-    if shape not in RESOLUTIONS[class_idx]:
+    # # discard images that do not have right resolution
+    # if shape not in RESOLUTIONS[class_idx]:
+    #     return None
+    # discard only too small images
+    if np.max(shape) < 2000:
         return None
-
     # some images may not be downloaded correclty and are B/W, discard those
     if img.ndim != 3:
         return None
@@ -362,110 +376,6 @@ def gen(items, batch_size, training=True, inference=False):
                     yield([X, O], [y])
                     batch_idx = 0
 
-def SmallNet(include_top, weights, input_shape, pooling):
-    img_input = Input(shape=input_shape)
-
-    x = Conv2D(64, (3, 3), strides=(2,2), padding='valid', name='conv1')(img_input)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Conv2D(64, (3, 3), strides=(2,2), padding='valid', name='conv2')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Conv2D(32, (3, 3), strides=(1,1), padding='valid', name='conv3')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = MaxPooling2D(pool_size=(3, 3), strides=(2,2), padding='valid')(x)
-
-    model = Model(img_input, x, name='smallnet')
-
-    return model
-
-# see https://arxiv.org/pdf/1703.04856.pdf
-def CaCNN(include_top, weights, input_shape, pooling):
-
-    img_input = Input(shape=input_shape)
-
-    def CaCNNBlock(x, preffix=''):
-        x = Conv2D(  8, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv1')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D( 16, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv2')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D( 32, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv3')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D( 64, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv4')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D(128, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv5')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = GlobalAveragePooling2D(name=preffix+'pooling')(x)  
-        
-        return x
-
-    x = img_input
-
-    x1 = Conv2D(3, (3, 3), use_bias=False, padding='valid', name='filter1')(x)
-    x1 = BatchNormalization()(x1)
-    x1 = CaCNNBlock(x1, preffix='block1')
-
-    x2 = Conv2D(3, (5, 5), use_bias=False, padding='valid', name='filter2')(x)
-    x2 = BatchNormalization()(x2)
-    x2 = CaCNNBlock(x2, preffix='block2')
-
-    x3 = Conv2D(3, (7, 7), use_bias=False, padding='valid', name='filter3')(x)
-    x3 = BatchNormalization()(x3)
-    x3 = CaCNNBlock(x3, preffix='block3')
-
-    x = concatenate([x1,x2,x3])
-
-    model = Model(img_input, x, name='cacnn')
-
-    model.summary()
-
-    return model
-
-# WiP
-def DenseNet40(input_shape=None,
-                    bottleneck=True,
-                    reduction=0.5,
-                    dropout_rate=0.0,
-                    weight_decay=1e-4,
-                    include_top=True,
-                    weights='imagenet',
-                    input_tensor=None,
-                    pooling=None,
-                    classes=1000,
-                    activation='softmax'):
-
-    return densenet.DenseNet(input_shape=input_shape,
-                 depth=40,
-                 nb_dense_block=3,
-                 growth_rate=12,
-                 nb_filter=-1,
-                 nb_layers_per_block=-1,
-                 bottleneck=bottleneck,
-                 reduction=reduction,
-                 dropout_rate=dropout_rate,
-                 weight_decay=weight_decay,
-                 subsample_initial_block=False,
-                 include_top=include_top,
-                 weights=weights,
-                 input_tensor=input_tensor,
-                 pooling=pooling,
-                 classes=classes,
-                 activation=activation,
-                 transition_pooling='avg')
 
 # MAIN
 
@@ -533,15 +443,10 @@ if not (args.test or args.test_train):
         ids_train = ids
         ids_val   = [ ]
 
-        extra_train_ids = [os.path.join(EXTRA_TRAIN_FOLDER,line.rstrip('\n')) for line in open(os.path.join(EXTRA_TRAIN_FOLDER, 'good_jpgs'))]
-        extra_train_ids.sort()
-        ids_train.extend(extra_train_ids)
-        new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
-        p = Pool(cpu_count() - 2)
-        p.map(check_remove_broken, tqdm(new_train_ids))
-        new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
-        ids_train.extend(new_train_ids)
-
+        ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER))
+        ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
+        ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
+        ids_train.sort()
         extra_val_ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
         extra_val_ids.sort()
         ids_val.extend(extra_val_ids)
@@ -664,7 +569,7 @@ else:
         ans["aug"] = aug
         for i in range(10):
             ans[CLASSES[i]] = probs[:,i]
-        pd.DataFrame(ans).to_hdf("tta_8_"+args.model.split("/")[-1],"prob")
+        pd.DataFrame(ans).to_hdf(PROBS_FOLDER + "/tta_8_"+args.model.split("/")[-1],"prob")
         
         if args.test_train:
             print("Accuracy: " + str(correct_predictions / len(ids)))
