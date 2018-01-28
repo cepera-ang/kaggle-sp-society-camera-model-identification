@@ -485,7 +485,6 @@ if not (args.test or args.test_train):
         ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER))
         ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
         ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
-        ids_train.sort()
         extra_val_ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
         extra_val_ids.sort()
         ids_val.extend(extra_val_ids)
@@ -502,12 +501,6 @@ if not (args.test or args.test_train):
             ids_train = list(set(ids_train).difference(set(idx_to_transfer)))
 
             ids_val.extend(idx_to_transfer)
-
-        new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
-        #p = Pool(cpu_count() - 2)
-        #p.map(check_remove_broken, tqdm(new_train_ids))
-        #new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
-        ids_train.extend(new_train_ids)
 
         random.shuffle(ids_train)
         random.shuffle(ids_val)
