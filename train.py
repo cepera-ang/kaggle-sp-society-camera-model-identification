@@ -1,7 +1,7 @@
-# IEEE's Signal Processing Society - Camera Model Identification 
+# IEEE's Signal Processing Society - Camera Model Identification
 # https://www.kaggle.com/c/sp-society-camera-model-identification
 #
-# (C) 2018 Andres Torrubia, licensed under GNU General Public License v3.0 
+# (C) 2018 Andres Torrubia, licensed under GNU General Public License v3.0
 # See license.txt
 
 import argparse
@@ -35,6 +35,7 @@ import itertools
 import re
 import os
 import sys
+from tqdm import tqdm
 import jpeg4py as jpeg
 from scipy import signal
 import cv2
@@ -77,12 +78,15 @@ parser.add_argument('-tta', action='store_true', help='Enable test time augmenta
 
 args = parser.parse_args()
 
-TRAIN_FOLDER = '../input/train'
+TRAIN_FOLDER       = '../input/train'
 EXTRA_TRAIN_FOLDER = '../input/flickr_images'
-NEW_TRAIN_FOLDER = '../input/flickr_new'
-TEST_FOLDER  = '../input/test'
-EXTRA_VAL_FOLDER = '../input/val_images'
-MODEL_FOLDER = 'models'
+NEW_TRAIN_FOLDER   = '../input/flickr_new'
+EXTRA_MOTOX_FOLDER = '../input/moto_x_all'
+EXTRA_VAL_FOLDER   = '../input/val_images'
+TEST_FOLDER        = '../input/test'
+MODEL_FOLDER       = '../output/models'
+SUBMITS_FOLDER     = '../output/submits'
+PROBS_FOLDER       = '../output/probs'
 
 CROP_SIZE = args.crop_size
 CLASSES = [
@@ -144,8 +148,17 @@ for class_id,resolutions in RESOLUTIONS.copy().items():
 MANIPULATIONS = ['jpg70', 'jpg90', 'gamma0.8', 'gamma1.2', 'bicubic0.5', 'bicubic0.8', 'bicubic1.5', 'bicubic2.0']
 
 N_CLASSES = len(CLASSES)
-load_img_fast_jpg  = lambda img_path: jpeg.JPEG(img_path).decode()
-load_img           = lambda img_path: np.array(Image.open(img_path))
+# load_img_fast_jpg  = lambda img_path: jpeg.JPEG(img_path).decode()
+load_img  = lambda img_path: np.array(Image.open(img_path))
+
+def load_img_fast_jpg(img_path):
+    try:
+        x = jpeg.JPEG(img_path).decode()
+        return x
+    except Exception:
+        print('Decoding error:', img_path)
+        return load_img(img_path)
+
 
 def check_remove_broken(img_path):
     try:
@@ -153,6 +166,16 @@ def check_remove_broken(img_path):
     except Exception:
         print('Decoding error:', img_path)
         os.remove(img_path)
+
+
+def check_load_ids(train_folder):
+    ids = glob.glob(join(train_folder, '*/*.jpg'))
+    print('Checking files in {} folder'.format(train_folder))
+    p = Pool(cpu_count() - 2)
+    p.map(check_remove_broken, tqdm(ids))
+    ids = glob.glob(join(train_folder, '*/*.jpg'))
+    return ids
+
 
 def random_manipulation(img, manipulation=None):
 
@@ -259,9 +282,13 @@ def process_item(item, training, transforms=[[]]):
 
     shape = list(img.shape[:2])
 
-    # discard images that do not have right resolution
-    if shape not in RESOLUTIONS[class_idx]:
+    # # discard images that do not have right resolution
+    # if shape not in RESOLUTIONS[class_idx]:
+    #     return None
+    # discard only too small images
+    if np.max(shape) < 2000:
         return None
+    # some images may not be downloaded correclty and are B/W, discard those
 
     # some images may not be downloaded correctly and are B/W, discard those
     if img.ndim != 3:
@@ -288,7 +315,7 @@ def process_item(item, training, transforms=[[]]):
         # some images are landscape, others are portrait, so augment training by randomly changing orientation
         if ((np.random.rand() < 0.5) and training and ORIENTATION_FLIP_ALLOWED[class_idx]) or force_orientation:
             img = np.rot90(_img, 1, (0,1))
-            # is it rot90(..3..), rot90(..1..) or both? 
+            # is it rot90(..3..), rot90(..1..) or both?
             # for phones with landscape mode pics could be taken upside down too, although less likely
             # most of the test images that are flipped are 1
             # however,eg. img_4d7be4c_unalt looks 3
@@ -296,7 +323,7 @@ def process_item(item, training, transforms=[[]]):
         else:
             img = _img
 
-        img = get_crop(img, CROP_SIZE * 2, random_crop=True if training else False) 
+        img = get_crop(img, CROP_SIZE * 2, random_crop=True if training else False)
         # * 2 bc may need to scale by 0.5x and still get a 512px crop
 
         if args.verbose:
@@ -378,78 +405,6 @@ def gen(items, batch_size, training=True):
                     yield([X, O], [y])
                     batch_idx = 0
 
-def SmallNet(include_top, weights, input_shape, pooling):
-    img_input = Input(shape=input_shape)
-
-    x = Conv2D(64, (3, 3), strides=(2,2), padding='valid', name='conv1')(img_input)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Conv2D(64, (3, 3), strides=(2,2), padding='valid', name='conv2')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = Conv2D(32, (3, 3), strides=(1,1), padding='valid', name='conv3')(x)
-    x = BatchNormalization()(x)
-    x = Activation('relu')(x)
-
-    x = MaxPooling2D(pool_size=(3, 3), strides=(2,2), padding='valid')(x)
-
-    model = Model(img_input, x, name='smallnet')
-
-    return model
-
-# see https://arxiv.org/pdf/1703.04856.pdf
-def CaCNN(include_top, weights, input_shape, pooling):
-
-    img_input = Input(shape=input_shape)
-
-    def CaCNNBlock(x, preffix=''):
-        x = Conv2D(  8, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv1')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D( 16, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv2')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D( 32, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv3')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D( 64, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv4')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = Conv2D(128, (3, 3), strides=(1,1), padding='valid', name=preffix+'conv5')(x)
-        x = BatchNormalization()(x)
-        x = Activation('relu')(x)
-
-        x = GlobalAveragePooling2D(name=preffix+'pooling')(x)  
-        
-        return x
-
-    x = img_input
-
-    x1 = Conv2D(3, (3, 3), use_bias=False, padding='valid', name='filter1')(x)
-    x1 = BatchNormalization()(x1)
-    x1 = CaCNNBlock(x1, preffix='block1')
-
-    x2 = Conv2D(3, (5, 5), use_bias=False, padding='valid', name='filter2')(x)
-    x2 = BatchNormalization()(x2)
-    x2 = CaCNNBlock(x2, preffix='block2')
-
-    x3 = Conv2D(3, (7, 7), use_bias=False, padding='valid', name='filter3')(x)
-    x3 = BatchNormalization()(x3)
-    x3 = CaCNNBlock(x3, preffix='block3')
-
-    x = concatenate([x1,x2,x3])
-
-    model = Model(img_input, x, name='cacnn')
-
-    model.summary()
-
-    return model
 
 # MAIN
 if args.model:
@@ -527,16 +482,9 @@ if not (args.test or args.test_train):
         ids_train = ids
         ids_val   = [ ]
 
-        extra_train_ids = [os.path.join(EXTRA_TRAIN_FOLDER,line.rstrip('\n')) \
-            for line in open(os.path.join(EXTRA_TRAIN_FOLDER, 'good_jpgs'))]
-        low_quality =     [os.path.join(EXTRA_TRAIN_FOLDER,line.rstrip('\n').split(' ')[0]) \
-            for line in open(os.path.join(EXTRA_TRAIN_FOLDER, 'low-quality'))]
-        extra_train_ids = [idx for idx in extra_train_ids if idx not in low_quality]
-        #extra_train_ids = [c for c in extra_train_ids if isfile(c)]
-        extra_train_ids.sort()
-        ids_train.extend(extra_train_ids)
-        random.shuffle(ids_train)
-
+        ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER))
+        ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
+        ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
         extra_val_ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
         extra_val_ids.sort()
         ids_val.extend(extra_val_ids)
@@ -553,13 +501,7 @@ if not (args.test or args.test_train):
             ids_train = list(set(ids_train).difference(set(idx_to_transfer)))
 
             ids_val.extend(idx_to_transfer)
-        
-        new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
-        #p = Pool(cpu_count() - 2)
-        #p.map(check_remove_broken, tqdm(new_train_ids))
-        #new_train_ids = glob.glob(join(NEW_TRAIN_FOLDER,'*/*.jpg'))
-        ids_train.extend(new_train_ids)
-        
+
         random.shuffle(ids_train)
         random.shuffle(ids_val)
 
@@ -686,7 +628,7 @@ else:
         ans["aug"] = aug
         for i in range(10):
             ans[CLASSES[i]] = probs[:,i]
-        pd.DataFrame(ans).to_hdf("tta_8_"+args.model.split("/")[-1],"prob")
+        pd.DataFrame(ans).to_hdf(PROBS_FOLDER + "/tta_8_"+args.model.split("/")[-1],"prob")
         
         if args.test_train:
             print("Accuracy: " + str(correct_predictions / len(ids)))
