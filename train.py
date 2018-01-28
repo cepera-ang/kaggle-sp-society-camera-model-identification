@@ -565,6 +565,7 @@ else:
         if args.test:
             csv_writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['fname','camera'])
+            classes = []
         else:
             correct_predictions = 0
         
@@ -623,6 +624,7 @@ else:
 
             if args.test:
                 csv_writer.writerow([idx.split('/')[-1], CLASSES[prediction_class_idx]])
+                classes.append(prediction_class_idx)    
         
         ans = pd.DataFrame()
         ans["name"] = fnames
@@ -638,5 +640,3 @@ else:
         if args.test:
             print("Test set predictions distribution:")
             print_distribution(None, classes=classes)
-            print("Now you are ready to:")
-            print("kg submit {}".format(csv_name))
