@@ -22,14 +22,15 @@ import re
 import os
 import cv2
 import math
-from multiprocessing import Pool, cpu_count
+from multiprocessing import cpu_count
+from multiprocessing.pool import ThreadPool
 from functools import partial
-from itertools import  islice
+from itertools import islice
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--max-epoch', type=int, default=200, help='Epoch to run')
-parser.add_argument('-b', '--batch-size', type=int, default=16, help='Batch Size during training, e.g. -b 64')
+parser.add_argument('-b', '--batch-size', type=int, default=10, help='Batch Size during training, e.g. -b 64')
 parser.add_argument('-l', '--learning_rate', type=float, default=1e-5, help='Initial learning rate')
 parser.add_argument('-m', '--model', help='load hdf5 model including weights (and continue training)')
 parser.add_argument('-w', '--weights', help='load hdf5 weights only (and continue training)')
@@ -77,9 +78,9 @@ def gen(items, batch_size, training=True):
     # class index
     y = np.empty((batch_size * valid_batch_factor), dtype=np.int64)
 
-    if 0:
+    if 1:
         # p = Pool(cpu_count()-2)
-        p = Pool(1)
+        p = ThreadPool(cpu_count()-2)
 
     transforms = VALIDATION_TRANSFORMS if validation else [[]]
 
@@ -88,14 +89,14 @@ def gen(items, batch_size, training=True):
         if training:
             random.shuffle(items)
 
-        if 0:
+        if 1:
             process_item_func = partial(process_item, training=training, transforms=transforms, crop_size=CROP_SIZE, classifier=args.classifier)
 
         batch_idx = 0
         iter_items = iter(items)
         for item_batch in iter(lambda:list(islice(iter_items, batch_size)), []):
 
-            if 0:
+            if 1:
                 batch_results = p.map(process_item_func, item_batch)
             else:
                 batch_results = []
@@ -132,7 +133,6 @@ def print_distribution(ids, classes=None):
 
 def create_models(nfolds):
     # from keras.applications import ResNet50
-
 
     from keras.optimizers import Adam, Adadelta, SGD
     from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
@@ -252,7 +252,7 @@ def create_models(nfolds):
                 epochs=args.max_epoch,
                 callbacks=[save_checkpoint, save_checkpoint2, reduce_lr],
                 initial_epoch=last_epoch,
-                max_queue_size=1,
+                max_queue_size=20,
                 use_multiprocessing=False,
                 workers=1,
                 class_weight=class_weight1)

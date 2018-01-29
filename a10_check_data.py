@@ -170,6 +170,9 @@ if __name__ == '__main__':
     # find_duplicates(INPUT_PATH)
     # get_train_exif_dict(INPUT_PATH + 'train/')
     # get_external_exif_dict(INPUT_PATH + 'raw/')
+
+    # 1st param - location of your directories like 'flickr1', 'val_images' etc
+    # 2nd parameter - location where files will be copied. Warning: you need to have sufficient space
     prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
 
 

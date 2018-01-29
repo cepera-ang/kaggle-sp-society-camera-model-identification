@@ -113,10 +113,14 @@ def process_item(item, training, transforms=[[]], crop_size=512, classifier='Res
         print(item, jpg_item)
         img = jpg_item.decode()
     else:
-        img = cv2.imread(item)
-        img = np.transpose(img, (1, 0, 2))
-        img = np.flip(img, axis=0)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        if 0:
+            img = cv2.imread(item)
+            img = np.transpose(img, (1, 0, 2))
+            img = np.flip(img, axis=0)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        else:
+            img = Image.open(item)
+            img = np.array(img)
 
     shape = list(img.shape[:2])
 
