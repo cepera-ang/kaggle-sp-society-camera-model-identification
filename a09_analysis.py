@@ -77,6 +77,24 @@ def check_train_resolutions():
         print('Camera: {} Resolutions in train: {}'.format(el, camera_sizes[el]))
 
 
+def check_external_resolutions():
+    files = glob.glob(INPUT_PATH + 'external/**/*.jpg', recursive=True)
+    camera_sizes = dict()
+    for f in files:
+        dir = os.path.basename(os.path.dirname(f))
+        sz = get_image_size(f)
+        if dir not in camera_sizes:
+            camera_sizes[dir] = dict()
+        if sz in camera_sizes[dir]:
+            camera_sizes[dir][sz] += 1
+        else:
+            camera_sizes[dir][sz] = 1
+
+    for el in sorted(camera_sizes.keys()):
+        print('Camera: {} Resolutions in external: {}'.format(el, camera_sizes[el]))
+
+
 if __name__ == '__main__':
     # test_1()
-    check_train_resolutions()
+    # check_train_resolutions()
+    check_external_resolutions()
