@@ -90,8 +90,9 @@ ORIENTATION_FLIP_ALLOWED = [
 ]
 
 
-def get_kfold_split(num_folds=4):
-    cache_path = OUTPUT_PATH + 'kfold_split_{}.pklz'.format(num_folds)
+def get_kfold_split(num_folds=4, cache_path=None):
+    if cache_path is None:
+        cache_path = OUTPUT_PATH + 'kfold_split_{}.pklz'.format(num_folds)
 
     if not os.path.isfile(cache_path):
         files = glob.glob(os.path.join(INPUT_PATH, 'train/*/*.jpg')) + \
