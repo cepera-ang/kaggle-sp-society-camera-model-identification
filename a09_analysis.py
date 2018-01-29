@@ -6,6 +6,7 @@ import jpeg4py as jpeg
 from PIL import Image
 import struct
 import imghdr
+import exifread
 
 
 def get_image_size(fname):
@@ -112,9 +113,54 @@ def test_different_jpeg_readers():
     exit()
 
 
+def get_cameras_quality(type='train'):
+    from PythonMagick import Image
+    files = glob.glob(INPUT_PATH + type + '/**/*.jpg', recursive=True)
+    camera_sizes = dict()
+    for f in files:
+        i = Image(f)
+        print(f, i.quality(), i.size().width(), i.size().height())
+        dir = os.path.basename(os.path.dirname(f))
+        sz = (i.quality(), i.size().width(), i.size().height())
+        if dir not in camera_sizes:
+            camera_sizes[dir] = dict()
+        if sz in camera_sizes[dir]:
+            camera_sizes[dir][sz] += 1
+        else:
+            camera_sizes[dir][sz] = 1
+
+    for el in sorted(camera_sizes.keys()):
+        print('Camera: {} Quality in train: {}'.format(el, camera_sizes[el]))
+    exit()
+
+
+def get_software_exif(type='train'):
+    files = glob.glob(INPUT_PATH + type + '/**/*.jpg', recursive=True)
+    count = 0
+    software = dict()
+    for f in files:
+        tags = exifread.process_file(open(f, 'rb'))
+        try:
+            soft = str(tags['Image Software'])
+            print(str(soft))
+            if soft in software:
+                software[soft] += 1
+            else:
+                software[soft] = 1
+            count+=1
+        except:
+            continue
+    print('Modified found: {}'.format(count))
+    for el in sorted(software.keys()):
+        print('Soft: {} Count: {}'.format(el, software[el]))
+
+
 if __name__ == '__main__':
     # test_1()
     # check_train_resolutions()
     # check_external_resolutions()
     # get_kfold_split(4)
-    test_different_jpeg_readers()
+    # test_different_jpeg_readers()
+    # get_cameras_quality('train')
+    # get_cameras_quality('external')
+    get_software_exif('external')

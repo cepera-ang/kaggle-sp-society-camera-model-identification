@@ -70,7 +70,7 @@ def prepare_external_dataset(raw_path, output_path):
     hash_checker = dict()
     files = glob.glob(raw_path + '**/*.jpg', recursive=True)
     if os.path.isdir(output_path):
-        print('Folder "{}" already exists! You must delete it before proceed!'.format(output_path))
+        print('Output folder "{}" already exists! You must delete it before proceed!'.format(output_path))
         exit()
     os.mkdir(output_path)
     print('Files found: {}'.format(len(files)))

@@ -2,7 +2,7 @@
 
 if __name__ == '__main__':
     import os
-    gpu_use = 2
+    gpu_use = 0
     FOLD_TO_CALC = [1, 2, 3, 4]
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
@@ -31,7 +31,7 @@ from itertools import islice
 parser = argparse.ArgumentParser()
 parser.add_argument('--max-epoch', type=int, default=200, help='Epoch to run')
 parser.add_argument('-b', '--batch-size', type=int, default=10, help='Batch Size during training, e.g. -b 64')
-parser.add_argument('-l', '--learning_rate', type=float, default=1e-5, help='Initial learning rate')
+parser.add_argument('-l', '--learning_rate', type=float, default=1e-3, help='Initial learning rate')
 parser.add_argument('-m', '--model', help='load hdf5 model including weights (and continue training)')
 parser.add_argument('-w', '--weights', help='load hdf5 weights only (and continue training)')
 parser.add_argument('-do', '--dropout', type=float, default=0.3, help='Dropout rate for FC layers')
@@ -80,7 +80,7 @@ def gen(items, batch_size, training=True):
 
     if 1:
         # p = Pool(cpu_count()-2)
-        p = ThreadPool(cpu_count()-2)
+        p = ThreadPool(cpu_count()-1)
 
     transforms = VALIDATION_TRANSFORMS if validation else [[]]
 
@@ -162,11 +162,11 @@ def create_models(nfolds):
         input_image = Input(shape=(CROP_SIZE, CROP_SIZE, 3))
         manipulated = Input(shape=(1,))
 
-        # classifier = globals()[args.classifier]
+        classifier = globals()[args.classifier]
 
-        classifier_model = ResNet50(
+        classifier_model = classifier(
             include_top=False,
-            weights='imagenet' if args.use_imagenet_weights else None,
+            weights='imagenet',
             input_shape=(CROP_SIZE, CROP_SIZE, 3),
             pooling=args.pooling if args.pooling != 'none' else None)
 
@@ -271,5 +271,6 @@ def create_models(nfolds):
 
 if __name__ == '__main__':
     start_time = time.time()
+    args.classifier = 'DenseNet201'
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))
