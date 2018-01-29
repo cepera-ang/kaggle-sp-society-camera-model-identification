@@ -95,7 +95,7 @@ def get_kfold_split(num_folds=4):
 
     if not os.path.isfile(cache_path):
         files = glob.glob(os.path.join(INPUT_PATH, 'train/*/*.jpg')) + \
-              glob.glob(os.path.join(INPUT_PATH, 'flickr/*/*.jpg'))
+              glob.glob(os.path.join(INPUT_PATH, 'external/*/*.jpg'))
 
         kf = KFold(n_splits=num_folds, shuffle=True, random_state=66)
         files = np.array(files)
@@ -107,6 +107,16 @@ def get_kfold_split(num_folds=4):
         save_in_file(ret, cache_path)
     else:
         ret = load_from_file(cache_path)
+
+    # check all files exists
+    if 1:
+        files = list(ret[0][0]) + list(ret[0][1])
+        print('Files in KFold split: {}'.format(len(files)))
+        for f in files:
+            if not os.path.isfile(f):
+                print('File {} is absent!'.format(f))
+                exit()
+
     return ret
 
 

@@ -97,4 +97,5 @@ def check_external_resolutions():
 if __name__ == '__main__':
     # test_1()
     # check_train_resolutions()
-    check_external_resolutions()
+    # check_external_resolutions()
+    get_kfold_split(4)
