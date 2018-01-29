@@ -67,7 +67,7 @@ def gen(items, batch_size, training=True):
     validation = not training 
 
     # during validation we store the unaltered images on batch_idx and a manip one on batch_idx + batch_size, hence the 2
-    valid_batch_factor = 1 # TODO: augment validation
+    valid_batch_factor = 1
 
     # X holds image crops
     X = np.empty((batch_size * valid_batch_factor, CROP_SIZE, CROP_SIZE, 3), dtype=np.float32)

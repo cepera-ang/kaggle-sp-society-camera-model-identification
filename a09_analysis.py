@@ -3,6 +3,7 @@ __author__ = 'ZFTurbo: https://kaggle.com/zfturbo'
 
 from a00_common_functions import *
 import jpeg4py as jpeg
+from PIL import Image
 import struct
 import imghdr
 
@@ -44,22 +45,6 @@ def get_image_size(fname):
         return width, height
 
 
-def test_1():
-    a = jpeg.JPEG('../input/train\Samsung-Galaxy-Note3\(GalaxyN3)7.jpg').decode()
-    print(a.shape)
-    print(a)
-    show_resized_image(a)
-    print('\n\n\n\n')
-    b = cv2.imread('../input/train\Samsung-Galaxy-Note3\(GalaxyN3)7.jpg')
-    b = np.transpose(b, (1, 0, 2))
-    b = np.flip(b, axis=0)
-    b = cv2.cvtColor(b, cv2.COLOR_BGR2RGB)
-    print(b.shape)
-    print(b)
-    show_resized_image(b)
-    exit()
-
-
 def check_train_resolutions():
     files = glob.glob(INPUT_PATH + 'train/**/*.jpg', recursive=True)
     camera_sizes = dict()
@@ -94,8 +79,42 @@ def check_external_resolutions():
         print('Camera: {} Resolutions in external: {}'.format(el, camera_sizes[el]))
 
 
+def test_different_jpeg_readers():
+    import numpy as np
+    from PIL import Image
+    import jpeg4py as jpeg
+    import cv2
+
+    a = jpeg.JPEG('../input/train/Samsung-Galaxy-Note3/(GalaxyN3)7.jpg').decode()
+    print(a.shape)
+    print(a)
+    print('\n\n\n\n')
+    show_resized_image(a)
+
+    b = cv2.imread('../input/train/Samsung-Galaxy-Note3/(GalaxyN3)7.jpg')
+    b = np.transpose(b, (1, 0, 2))
+    b = np.flip(b, axis=0)
+    b = cv2.cvtColor(b, cv2.COLOR_BGR2RGB)
+    print(b.shape)
+    print(b)
+    print('\n\n\n\n')
+    show_resized_image(b)
+
+    c = Image.open('../input/train/Samsung-Galaxy-Note3/(GalaxyN3)7.jpg')
+    c = np.array(c)
+    print(c.shape)
+    print(c)
+    show_resized_image(c)
+
+    print('Max diff 1: {}'.format(np.abs(a.astype(np.int32) - b.astype(np.int32)).max()))
+    print('Max diff 2: {}'.format(np.abs(a.astype(np.int32) - c.astype(np.int32)).max()))
+    print('Max diff 3: {}'.format(np.abs(b.astype(np.int32) - c.astype(np.int32)).max()))
+    exit()
+
+
 if __name__ == '__main__':
     # test_1()
     # check_train_resolutions()
     # check_external_resolutions()
-    get_kfold_split(4)
+    # get_kfold_split(4)
+    test_different_jpeg_readers()

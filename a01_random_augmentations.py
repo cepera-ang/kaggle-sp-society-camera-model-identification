@@ -6,6 +6,9 @@ import jpeg4py as jpeg
 from io import BytesIO
 from PIL import Image
 import math
+from keras.utils import to_categorical
+from keras.applications import *
+
 
 MANIPULATIONS = ['jpg70', 'jpg90', 'gamma0.8', 'gamma1.2', 'bicubic0.5', 'bicubic0.8', 'bicubic1.5', 'bicubic2.0']
 
