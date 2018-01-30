@@ -245,6 +245,12 @@ def get_valid_fields_from_csv(in_csv, out_csv):
         valid_resolutions[c][v1] = 1
         valid_resolutions_quality[c][v2] = 1
 
+    # Additional manual valid resolutions
+    valid_resolutions['Motorola-X'][(4160, 2340)] = 1
+    valid_resolutions['Motorola-X'][(2340, 4160)] = 1
+    valid_resolutions_quality['Motorola-X'][(4160, 2340, 95)] = 1
+    valid_resolutions_quality['Motorola-X'][(2340, 4160, 95)] = 1
+
     valid_res_list = []
     valid_res_quality_list = []
     valid_software_list = []
@@ -281,14 +287,19 @@ def get_valid_fields_from_csv(in_csv, out_csv):
 def show_csv_fields_stats(in_csv):
     df = pd.read_csv(in_csv)
     df.fillna('', inplace=True)
+    classes = df['class'].unique()
     external_part = df[df['is_external'] == 1]
     print('External images: {}'.format(len(external_part)))
     print('Valid resolution: {}'.format(len(external_part[external_part['valid_resolution'] == 1])))
     print('Valid resolution and quality: {}'.format(len(external_part[external_part['valid_resolution_and_quality'] == 1])))
     print('Valid software: {}'.format(len(external_part[external_part['valid_soft'] == 1])))
-    print('All checks pass: {}'.format(len(
-        external_part[(external_part['valid_soft'] == 1) & (external_part['valid_resolution_and_quality'] == 1) & (external_part['valid_soft'] == 1)]
-    )))
+    all_checks = external_part[(external_part['valid_soft'] == 1) & (external_part['valid_resolution_and_quality'] == 1) & (external_part['valid_soft'] == 1)]
+    print('All checks pass: {}'.format(len(all_checks)))
+    print('Classes distribution')
+    for c in classes:
+        l = len(all_checks[all_checks['class'] == c])
+        total = len(df[df['class'] == c])
+        print('{}: valid {} ({:.2f}%) from total {}'.format(c, l, 100*l/len(all_checks), total))
 
 
 if __name__ == '__main__':
