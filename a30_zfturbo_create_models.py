@@ -2,8 +2,8 @@
 
 if __name__ == '__main__':
     import os
-    gpu_use = 2
-    FOLD_TO_CALC = [1, 2, 3, 4]
+    gpu_use = 3
+    FOLD_TO_CALC = [gpu_use+1]
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
     os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
@@ -80,7 +80,7 @@ def gen(items, batch_size, training=True):
 
     if 1:
         # p = Pool(cpu_count()-2)
-        p = ThreadPool(cpu_count()-1)
+        p = ThreadPool(6)
 
     transforms = VALIDATION_TRANSFORMS if validation else [[]]
 
@@ -202,9 +202,9 @@ def create_models(nfolds):
 
     # TRAINING
     num_fold = 0
-    # kfold_split = get_kfold_split(nfolds)
-    single_split = get_single_split_with_csv_file(fraction=0.9, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
-    for ids_train, ids_val in [single_split]:
+    kfold_split = get_kfold_split_with_csv_file(nfolds, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
+    # single_split = get_single_split_with_csv_file(fraction=0.9, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
+    for ids_train, ids_val in kfold_split:
         num_fold += 1
         print('Train files: {}'.format(len(ids_train)))
         print('Valid files: {}'.format(len(ids_val)))
@@ -271,9 +271,11 @@ def create_models(nfolds):
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.classifier = 'ResNet50'
+    args.classifier = 'DenseNet121'
     args.learning_rate = 1e-4
-    args.batch_size = 10
-    args.model = MODELS_PATH + 'ResNet50_do0.3_doc0.0_avg-fold_1-epoch007-val_acc0.785386.hdf5'
+    args.batch_size = 8
+    if gpu_use == 3:
+        args.batch_size = 6
+    # args.model = MODELS_PATH + 'ResNet50_do0.3_doc0.0_avg-fold_1-epoch007-val_acc0.785386.hdf5'
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))
