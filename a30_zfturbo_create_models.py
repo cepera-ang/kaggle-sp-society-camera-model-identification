@@ -273,7 +273,7 @@ def create_models(nfolds):
 if __name__ == '__main__':
     start_time = time.time()
     args.classifier = 'ResNet50'
-    args.learning_rate = 1e-3
+    args.learning_rate = 1e-4
     args.batch_size = 10
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))
