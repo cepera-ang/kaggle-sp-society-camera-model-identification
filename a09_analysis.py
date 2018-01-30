@@ -7,6 +7,8 @@ from PIL import Image
 import struct
 import imghdr
 import exifread
+import skimage.io
+import imageio
 
 
 def get_image_size(fname):
@@ -107,9 +109,25 @@ def test_different_jpeg_readers():
     print(c)
     show_resized_image(c)
 
+    d = skimage.io.imread('../input/train/Samsung-Galaxy-Note3/(GalaxyN3)7.jpg')
+    d = np.array(d)
+    print(d.shape)
+    print(d)
+    show_resized_image(d)
+
+    e = imageio.imread('../input/train/Samsung-Galaxy-Note3/(GalaxyN3)7.jpg')
+    e = np.transpose(e, (1, 0, 2))
+    e = np.flip(e, axis=0)
+    print(e.shape)
+    print(e)
+    show_resized_image(e)
+
     print('Max diff 1: {}'.format(np.abs(a.astype(np.int32) - b.astype(np.int32)).max()))
     print('Max diff 2: {}'.format(np.abs(a.astype(np.int32) - c.astype(np.int32)).max()))
     print('Max diff 3: {}'.format(np.abs(b.astype(np.int32) - c.astype(np.int32)).max()))
+    print('Max diff 4: {}'.format(np.abs(a.astype(np.int32) - d.astype(np.int32)).max()))
+    print('Max diff 5: {}'.format(np.abs(b.astype(np.int32) - d.astype(np.int32)).max()))
+    print('Max diff 6: {}'.format(np.abs(b.astype(np.int32) - e.astype(np.int32)).max()))
     exit()
 
 
@@ -155,6 +173,70 @@ def get_software_exif(type='train'):
         print('Soft: {} Count: {}'.format(el, software[el]))
 
 
+def check_reading_speed():
+    files = glob.glob(INPUT_PATH + 'train/**/*.jpg', recursive=True)
+    files = files[:300]
+    print('Files: {}'.format(len(files)))
+
+    if 0:
+        start_time = time.time()
+        d = []
+        for f in files:
+            a = jpeg.JPEG(f).decode()
+            d.append(a)
+        print('Time to read {} for libjpeg-turbo: {:.2f} sec'.format(len(files), time.time() - start_time))
+
+    if 0:
+        start_time = time.time()
+        d = []
+        for f in files:
+            b = cv2.imread(f)
+            b = np.transpose(b, (1, 0, 2))
+            b = np.flip(b, axis=0)
+            b = cv2.cvtColor(b, cv2.COLOR_BGR2RGB)
+            d.append(b)
+        print('Time to read {} for cv2 with conversion: {:.2f} sec'.format(len(files), time.time() - start_time))
+
+    if 0:
+        start_time = time.time()
+        d = []
+        for f in files:
+            b = cv2.imread(f)
+            d.append(b)
+        print('Time to read {} for cv2 no conversion: {:.2f} sec'.format(len(files), time.time() - start_time))
+
+    if 0:
+        start_time = time.time()
+        d = []
+        for f in files:
+            c = Image.open(f)
+            c = np.array(c)
+            d.append(c)
+        print('Time to read {} for PIL: {:.2f} sec'.format(len(files), time.time() - start_time))
+
+    if 0:
+        start_time = time.time()
+        d = []
+        plugin = 'freeimage'
+        for f in files:
+            c = skimage.io.imread(f, plugin=plugin)
+            c = np.array(c)
+            d.append(c)
+        print('Time to read {} for skimage.io Plugin: {}: {:.2f} sec'.format(len(files), plugin, time.time() - start_time))
+
+    if 1:
+        start_time = time.time()
+        d = []
+        for f in files:
+            c = imageio.imread(f)
+            d.append(c)
+        print('Time to read {} for Imageio (no rotate): {:.2f} sec'.format(len(files), time.time() - start_time))
+
+
+def check_multithread_jpeg_read():
+    return
+
+
 if __name__ == '__main__':
     # test_1()
     # check_train_resolutions()
@@ -164,4 +246,18 @@ if __name__ == '__main__':
     # get_cameras_quality('train')
     # get_cameras_quality('external')
     # get_software_exif('external')
-    t, v = get_single_split(fraction=0.9, only_train=True)
+    # t, v = get_single_split(fraction=0.9, only_train=True)
+    # test_different_jpeg_readers()
+    check_reading_speed()
+
+
+'''
+Time to read 300 for libjpeg-turbo: 9.62 sec
+Time to read 300 for cv2 with conversion: 41.68 sec
+Time to read 300 for cv2 no conversion: 24.69 sec
+Time to read 300 for PIL: 27.91 sec
+Time to read 300 for skimage.io: 30.06 sec
+Time to read 300 for skimage.io Plugin: matplotlib: 30.43 sec
+Time to read 300 for skimage.io Plugin: freeimage: 30.80 sec
+Time to read 300 for Imageio (no rotate): 26.10 sec
+'''

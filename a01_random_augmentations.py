@@ -124,13 +124,14 @@ def process_item(item, training, transforms=[[]], crop_size=512, classifier='Res
 
     shape = list(img.shape[:2])
 
-    # discard images that do not have right resolution
-    if shape not in RESOLUTIONS[class_idx]:
-        return None
+    if 0:
+        # discard images that do not have right resolution
+        if shape not in RESOLUTIONS[class_idx]:
+            return None
 
-    # some images may not be downloaded correctly and are B/W, discard those
-    if img.ndim != 3:
-        return None
+        # some images may not be downloaded correctly and are B/W, discard those
+        if img.ndim != 3:
+            return None
 
     if len(transforms) == 1:
         _img = img

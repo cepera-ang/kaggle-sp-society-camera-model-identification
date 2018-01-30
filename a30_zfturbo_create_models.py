@@ -2,7 +2,7 @@
 
 if __name__ == '__main__':
     import os
-    gpu_use = 0
+    gpu_use = 2
     FOLD_TO_CALC = [1, 2, 3, 4]
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
@@ -132,6 +132,8 @@ def print_distribution(ids, classes=None):
 
 
 def create_models(nfolds):
+    global model, CROP_SIZE
+
     # from keras.applications import ResNet50
 
     from keras.optimizers import Adam, Adadelta, SGD
@@ -141,21 +143,18 @@ def create_models(nfolds):
         BatchNormalization, Activation, GlobalAveragePooling2D, Reshape
     from multi_gpu_keras import multi_gpu_model
 
-
-    global model, CROP_SIZE
-
     # MAIN
     if args.model:
         print("Loading model " + args.model)
 
         model = load_model(args.model, compile=False)
         # e.g. DenseNet201_do0.3_doc0.0_avg-epoch128-val_acc0.964744.hdf5
-        match = re.search(r'(([a-zA-Z0-9]+)_[A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.model)
+        match = re.search(r'(([a-zA-Z0-9]+)_[A-Za-z_\d\.]+)-fold_(\d+)-epoch(\d+)-.*\.hdf5', args.model)
         model_name = match.group(1)
         args.classifier = match.group(2)
         CROP_SIZE = args.crop_size = model.get_input_shape_at(0)[0][1]
         print("Overriding classifier: {} and crop size: {}".format(args.classifier, args.crop_size))
-        last_epoch = int(match.group(3))
+        last_epoch = int(match.group(4))
     else:
         last_epoch = 0
 
@@ -275,5 +274,6 @@ if __name__ == '__main__':
     args.classifier = 'ResNet50'
     args.learning_rate = 1e-4
     args.batch_size = 10
+    args.model = MODELS_PATH + 'ResNet50_do0.3_doc0.0_avg-fold_1-epoch004-val_acc0.780193.hdf5'
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))
