@@ -111,8 +111,8 @@ def gen(items, batch_size, training=True):
                         X[batch_idx], O[batch_idx], y[batch_idx] = batch_result
                         batch_idx += 1
                     else:
-                        for _X,_O,_y in zip(*batch_result):
-                            X[batch_idx], O[batch_idx], y[batch_idx] = _X,_O,_y
+                        for _X, _O, _y in zip(*batch_result):
+                            X[batch_idx], O[batch_idx], y[batch_idx] = _X, _O, _y
                             batch_idx += 1
                             if batch_idx == batch_size:
                                 yield([X, O], [y])

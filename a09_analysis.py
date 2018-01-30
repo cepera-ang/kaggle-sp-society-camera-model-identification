@@ -284,6 +284,32 @@ def check_multithread_jpeg_read():
     return
 
 
+def improve_subm_v1(subm_path, out_path):
+    df = pd.read_csv(subm_path)
+    answ = np.argmax(df[CLASSES].values, axis=1)
+    camera = np.array(CLASSES)[answ]
+    df['camera'] = camera
+    print(df['camera'])
+
+    for c in CLASSES:
+        print('{}: {}'.format(c, len(df[df['camera'] == c])))
+
+    checker = dict()
+    for c in CLASSES:
+        checker[c] = [0, 0]
+
+    for index, row in df.iterrows():
+        if '_manip' in row['fname']:
+            checker[row['camera']][0] += 1
+        else:
+            checker[row['camera']][1] += 1
+
+    for c in CLASSES:
+        print('{}: {}'.format(c, checker[c]))
+
+    # df[['fname', 'camera']].to_csv(out_path, index=False)
+
+
 if __name__ == '__main__':
     # test_1()
     # check_train_resolutions()
@@ -295,7 +321,8 @@ if __name__ == '__main__':
     # get_software_exif('external')
     # t, v = get_single_split(fraction=0.9, only_train=True)
     # tst_different_jpeg_readers()
-    check_reading_speed()
+    # check_reading_speed()
+    improve_subm_v1(SUBM_PATH + '3_sq_mean_raw.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
 
 
 '''
