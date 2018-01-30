@@ -9,6 +9,7 @@ import imghdr
 import exifread
 import skimage.io
 import imageio
+import pyvips
 
 
 def get_image_size(fname):
@@ -92,7 +93,7 @@ def tst_different_jpeg_readers():
     print(a.shape)
     print(a)
     print('\n\n\n\n')
-    show_resized_image(a)
+    # show_resized_image(a)
 
     b = cv2.imread('../input/train/Samsung-Galaxy-Note3/(GalaxyN3)7.jpg')
     b = np.transpose(b, (1, 0, 2))
@@ -101,26 +102,47 @@ def tst_different_jpeg_readers():
     print(b.shape)
     print(b)
     print('\n\n\n\n')
-    show_resized_image(b)
+    # show_resized_image(b)
 
     c = Image.open('../input/train/Samsung-Galaxy-Note3/(GalaxyN3)7.jpg')
     c = np.array(c)
     print(c.shape)
     print(c)
-    show_resized_image(c)
+    # show_resized_image(c)
 
     d = skimage.io.imread('../input/train/Samsung-Galaxy-Note3/(GalaxyN3)7.jpg')
     d = np.array(d)
     print(d.shape)
     print(d)
-    show_resized_image(d)
+    # show_resized_image(d)
 
     e = imageio.imread('../input/train/Samsung-Galaxy-Note3/(GalaxyN3)7.jpg')
     e = np.transpose(e, (1, 0, 2))
     e = np.flip(e, axis=0)
     print(e.shape)
     print(e)
-    show_resized_image(e)
+    # show_resized_image(e)
+
+    format_to_dtype = {
+        'uchar': np.uint8,
+        'char': np.int8,
+        'ushort': np.uint16,
+        'short': np.int16,
+        'uint': np.uint32,
+        'int': np.int32,
+        'float': np.float32,
+        'double': np.float64,
+        'complex': np.complex64,
+        'dpcomplex': np.complex128,
+    }
+
+    f = pyvips.Image.new_from_file('../input/train/Samsung-Galaxy-Note3/(GalaxyN3)7.jpg', access='sequential')
+    f = np.ndarray(buffer=f.write_to_memory(),
+                       dtype=format_to_dtype[f.format],
+                       shape=[f.height, f.width, f.bands])
+    print(f.shape)
+    print(f)
+    show_resized_image(f)
 
     print('Max diff 1: {}'.format(np.abs(a.astype(np.int32) - b.astype(np.int32)).max()))
     print('Max diff 2: {}'.format(np.abs(a.astype(np.int32) - c.astype(np.int32)).max()))
@@ -128,6 +150,7 @@ def tst_different_jpeg_readers():
     print('Max diff 4: {}'.format(np.abs(a.astype(np.int32) - d.astype(np.int32)).max()))
     print('Max diff 5: {}'.format(np.abs(b.astype(np.int32) - d.astype(np.int32)).max()))
     print('Max diff 6: {}'.format(np.abs(b.astype(np.int32) - e.astype(np.int32)).max()))
+    print('Max diff 7: {}'.format(np.abs(b.astype(np.int32) - f.astype(np.int32)).max()))
     exit()
 
 
@@ -178,7 +201,7 @@ def check_reading_speed():
     files = files[:300]
     print('Files: {}'.format(len(files)))
 
-    if 1:
+    if 0:
         start_time = time.time()
         d = []
         for f in files:
@@ -186,7 +209,7 @@ def check_reading_speed():
             d.append(a)
         print('Time to read {} for libjpeg-turbo: {:.2f} sec'.format(len(files), time.time() - start_time))
 
-    if 1:
+    if 0:
         start_time = time.time()
         d = []
         for f in files:
@@ -197,7 +220,7 @@ def check_reading_speed():
             d.append(b)
         print('Time to read {} for cv2 with conversion: {:.2f} sec'.format(len(files), time.time() - start_time))
 
-    if 1:
+    if 0:
         start_time = time.time()
         d = []
         for f in files:
@@ -214,23 +237,47 @@ def check_reading_speed():
             d.append(c)
         print('Time to read {} for PIL: {:.2f} sec'.format(len(files), time.time() - start_time))
 
-    if 1:
+    if 0:
         start_time = time.time()
         d = []
-        plugin = 'freeimage'
+        plugin = 'matplotlib'
         for f in files:
             c = skimage.io.imread(f, plugin=plugin)
             c = np.array(c)
             d.append(c)
         print('Time to read {} for skimage.io Plugin: {}: {:.2f} sec'.format(len(files), plugin, time.time() - start_time))
 
-    if 1:
+    if 0:
         start_time = time.time()
         d = []
         for f in files:
             c = imageio.imread(f)
             d.append(c)
         print('Time to read {} for Imageio (no rotate): {:.2f} sec'.format(len(files), time.time() - start_time))
+
+    if 0:
+        format_to_dtype = {
+            'uchar': np.uint8,
+            'char': np.int8,
+            'ushort': np.uint16,
+            'short': np.int16,
+            'uint': np.uint32,
+            'int': np.int32,
+            'float': np.float32,
+            'double': np.float64,
+            'complex': np.complex64,
+            'dpcomplex': np.complex128,
+        }
+
+        start_time = time.time()
+        d = []
+        for f in files:
+            c = pyvips.Image.new_from_file(f, access='sequential')
+            c = np.ndarray(buffer=c.write_to_memory(),
+                           dtype=format_to_dtype[c.format],
+                           shape=[c.height, c.width, c.bands])
+            d.append(c)
+        print('Time to read {} for PyVips: {:.2f} sec'.format(len(files), time.time() - start_time))
 
 
 def check_multithread_jpeg_read():
@@ -260,4 +307,13 @@ Time to read 300 for skimage.io: 30.06 sec
 Time to read 300 for skimage.io Plugin: matplotlib: 30.43 sec
 Time to read 300 for skimage.io Plugin: freeimage: 30.80 sec
 Time to read 300 for Imageio (no rotate): 26.10 sec
+
+Time to read 300 for libjpeg-turbo: 9.86 sec
+Time to read 300 for cv2 with conversion: 36.10 sec
+Time to read 300 for cv2 no conversion: 21.70 sec
+Time to read 300 for PIL: 25.17 sec
+Time to read 300 for PIL-simd: 25.81 sec
+Time to read 300 for skimage.io Plugin: freeimage: 27.80 sec
+Time to read 300 for Imageio (no rotate): 24.55 sec
+Time to read 300 for PyVips: 12.61 sec
 '''
