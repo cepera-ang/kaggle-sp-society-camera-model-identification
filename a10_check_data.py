@@ -172,6 +172,7 @@ def prepare_common_info_csv_for_files(train_path, external_path):
             glob.glob(external_path + '**/*.jpg', recursive=True)
     info_arr = []
     for f in files:
+        dir = os.path.basename(os.path.dirname(f))
         if '/train' in f:
             is_external = 0
         else:
@@ -187,13 +188,19 @@ def prepare_common_info_csv_for_files(train_path, external_path):
             soft = ''
         i = Image(f)
         quality, width, height = i.quality(), i.size().width(), i.size().height()
-        line = [f, is_external, model, soft, quality, width, height]
+        line = [f, dir, is_external, model, soft, quality, width, height]
         info_arr.append(line)
         print(line)
 
-    df = pd.DataFrame(info_arr, columns=['filename', 'is_external', 'model', 'soft', 'quality', 'width', 'height'])
+    df = pd.DataFrame(info_arr, columns=['filename', 'class', 'is_external', 'model', 'soft', 'quality', 'width', 'height'])
     print(df)
     df.to_csv(OUTPUT_PATH + 'common_image_info.csv', index=False)
+
+
+def get_valid_fields_from_csv(in_csv, out_csv):
+    df = pd.read_csv(in_csv)
+    train_part = df[df['is_external'] == 0]
+    print('Train length: {}'.format(len(train_part)))
 
 
 
@@ -206,7 +213,8 @@ if __name__ == '__main__':
     # 1st param - location of your directories like 'flickr1', 'val_images' etc
     # 2nd parameter - location where files will be copied. Warning: you need to have sufficient space
     # prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
-    prepare_common_info_csv_for_files(INPUT_PATH + 'train/', INPUT_PATH + 'external/')
+    # prepare_common_info_csv_for_files(INPUT_PATH + 'train/', INPUT_PATH + 'external/')
+    get_valid_fields_from_csv(OUTPUT_PATH + 'common_image_info.csv', OUTPUT_PATH + 'common_image_info_additional.csv')
 
 
 '''
