@@ -252,7 +252,7 @@ def create_models(nfolds):
                 epochs=args.max_epoch,
                 callbacks=[save_checkpoint, save_checkpoint2, reduce_lr],
                 initial_epoch=last_epoch,
-                max_queue_size=20,
+                max_queue_size=40,
                 use_multiprocessing=False,
                 workers=1,
                 class_weight=class_weight1)
@@ -274,6 +274,6 @@ if __name__ == '__main__':
     args.classifier = 'ResNet50'
     args.learning_rate = 1e-4
     args.batch_size = 10
-    args.model = MODELS_PATH + 'ResNet50_do0.3_doc0.0_avg-fold_1-epoch004-val_acc0.780193.hdf5'
+    args.model = MODELS_PATH + 'ResNet50_do0.3_doc0.0_avg-fold_1-epoch007-val_acc0.785386.hdf5'
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))

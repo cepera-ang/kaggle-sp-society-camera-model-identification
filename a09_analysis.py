@@ -228,7 +228,7 @@ def check_reading_speed():
             d.append(b)
         print('Time to read {} for cv2 no conversion: {:.2f} sec'.format(len(files), time.time() - start_time))
 
-    if 1:
+    if 0:
         start_time = time.time()
         d = []
         for f in files:
@@ -255,7 +255,7 @@ def check_reading_speed():
             d.append(c)
         print('Time to read {} for Imageio (no rotate): {:.2f} sec'.format(len(files), time.time() - start_time))
 
-    if 0:
+    if 1:
         format_to_dtype = {
             'uchar': np.uint8,
             'char': np.int8,

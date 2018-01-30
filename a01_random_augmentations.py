@@ -6,6 +6,7 @@ import jpeg4py as jpeg
 from io import BytesIO
 from PIL import Image
 import math
+import pyvips
 from keras.utils import to_categorical
 from keras.applications import *
 
@@ -112,15 +113,19 @@ def process_item(item, training, transforms=[[]], crop_size=512, classifier='Res
         jpg_item = jpeg.JPEG(item)
         print(item, jpg_item)
         img = jpg_item.decode()
-    else:
-        if 0:
-            img = cv2.imread(item)
-            img = np.transpose(img, (1, 0, 2))
-            img = np.flip(img, axis=0)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        else:
-            img = Image.open(item)
-            img = np.array(img)
+    elif 0:
+        img = cv2.imread(item)
+        img = np.transpose(img, (1, 0, 2))
+        img = np.flip(img, axis=0)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    elif 0:
+        img = Image.open(item)
+        img = np.array(img)
+
+    img = pyvips.Image.new_from_file(item, access='sequential')
+    img = np.ndarray(buffer=img.write_to_memory(),
+                   dtype=np.uint8,
+                   shape=[img.height, img.width, img.bands])
 
     shape = list(img.shape[:2])
 
