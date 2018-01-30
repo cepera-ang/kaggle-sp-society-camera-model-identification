@@ -165,6 +165,38 @@ def prepare_external_dataset(raw_path, output_path):
     return exif_dict
 
 
+def prepare_common_info_csv_for_files(train_path, external_path):
+    from PythonMagick import Image
+
+    files = glob.glob(train_path + '**/*.jpg', recursive=True) + \
+            glob.glob(external_path + '**/*.jpg', recursive=True)
+    info_arr = []
+    for f in files:
+        if '/train' in f:
+            is_external = 0
+        else:
+            is_external = 1
+        tags = exifread.process_file(open(f, 'rb'))
+        try:
+            model = str(tags['Image Model'])
+        except:
+            model = ''
+        try:
+            soft = str(tags['Image Software'])
+        except:
+            soft = ''
+        i = Image(f)
+        quality, width, height = i.quality(), i.size().width(), i.size().height()
+        line = [f, is_external, model, soft, quality, width, height]
+        info_arr.append(line)
+        print(line)
+
+    df = pd.DataFrame(info_arr, columns=['filename', 'is_external', 'model', 'soft', 'quality', 'width', 'height'])
+    print(df)
+    df.to_csv(OUTPUT_PATH + 'common_image_info.csv', index=False)
+
+
+
 if __name__ == '__main__':
     # find_duplicates(INPUT_PATH + 'external/')
     # find_duplicates(INPUT_PATH)
@@ -173,7 +205,8 @@ if __name__ == '__main__':
 
     # 1st param - location of your directories like 'flickr1', 'val_images' etc
     # 2nd parameter - location where files will be copied. Warning: you need to have sufficient space
-    prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
+    # prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
+    prepare_common_info_csv_for_files(INPUT_PATH + 'train/', INPUT_PATH + 'external/')
 
 
 '''

@@ -163,4 +163,5 @@ if __name__ == '__main__':
     # test_different_jpeg_readers()
     # get_cameras_quality('train')
     # get_cameras_quality('external')
-    get_software_exif('external')
+    # get_software_exif('external')
+    t, v = get_single_split(fraction=0.9, only_train=True)

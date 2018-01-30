@@ -30,7 +30,7 @@ from itertools import islice
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--max-epoch', type=int, default=200, help='Epoch to run')
-parser.add_argument('-b', '--batch-size', type=int, default=10, help='Batch Size during training, e.g. -b 64')
+parser.add_argument('-b', '--batch-size', type=int, default=4, help='Batch Size during training, e.g. -b 64')
 parser.add_argument('-l', '--learning_rate', type=float, default=1e-3, help='Initial learning rate')
 parser.add_argument('-m', '--model', help='load hdf5 model including weights (and continue training)')
 parser.add_argument('-w', '--weights', help='load hdf5 weights only (and continue training)')
@@ -203,8 +203,9 @@ def create_models(nfolds):
 
     # TRAINING
     num_fold = 0
-    kfold_split = get_kfold_split(nfolds)
-    for ids_train, ids_val in kfold_split:
+    # kfold_split = get_kfold_split(nfolds)
+    single_split = get_single_split(fraction=0.9, only_train=True)
+    for ids_train, ids_val in [single_split]:
         num_fold += 1
         print('Train files: {}'.format(len(ids_train)))
         print('Valid files: {}'.format(len(ids_val)))
@@ -271,6 +272,8 @@ def create_models(nfolds):
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.classifier = 'DenseNet201'
+    args.classifier = 'ResNet50'
+    args.learning_rate = 1e-3
+    args.batch_size = 10
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))

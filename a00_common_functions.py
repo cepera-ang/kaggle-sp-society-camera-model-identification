@@ -11,7 +11,7 @@ import cv2
 import datetime
 import pandas as pd
 from sklearn.metrics import fbeta_score
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, train_test_split
 from collections import Counter, defaultdict
 import random
 import shutil
@@ -119,6 +119,33 @@ def get_kfold_split(num_folds=4, cache_path=None):
                 exit()
 
     return ret
+
+
+def get_single_split(fraction=0.9, only_train=False, cache_path=None):
+    if cache_path is None:
+        cache_path = OUTPUT_PATH + 'single_split_{}_{}.pklz'.format(fraction, only_train)
+
+    if not os.path.isfile(cache_path):
+        files = glob.glob(os.path.join(INPUT_PATH, 'train/*/*.jpg'))
+        if not only_train:
+              files += glob.glob(os.path.join(INPUT_PATH, 'external/*/*.jpg'))
+
+        files = np.array(files)
+        train, valid = train_test_split(files, train_size=fraction, random_state=66)
+        save_in_file((train, valid), cache_path)
+    else:
+        train, valid = load_from_file(cache_path)
+
+    # check all files exists
+    if 1:
+        files = list(train) + list(valid)
+        print('Files in KFold split: {}'.format(len(files)))
+        for f in files:
+            if not os.path.isfile(f):
+                print('File {} is absent!'.format(f))
+                exit()
+
+    return train, valid
 
 
 def save_in_file(arr, file_name):
