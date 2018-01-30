@@ -47,6 +47,7 @@ from multiprocessing import Pool, cpu_count
 from functools import partial
 from itertools import  islice
 from conditional import conditional
+import subprocess
 
 SEED = 42
 
@@ -81,9 +82,9 @@ parser.add_argument('--check-train', action='store_true', default=False, help='E
 args = parser.parse_args()
 
 TRAIN_FOLDER       = '../input/train'
-EXTRA_TRAIN_FOLDER = '../input/raw/flickr_images'
-NEW_TRAIN_FOLDER   = '../input/raw/flickr_new'
-EXTRA_MOTOX_FOLDER = '../input/raw/moto_x_all'
+EXTRA_TRAIN_FOLDER = '../input/external'
+# NEW_TRAIN_FOLDER   = '../input/raw/flickr_new'
+# EXTRA_MOTOX_FOLDER = '../input/raw/moto_x_all'
 EXTRA_VAL_FOLDER   = '../input/raw/val_images'
 TEST_FOLDER        = '../input/test'
 MODEL_FOLDER       = '../output/models'
@@ -275,6 +276,12 @@ def get_class(class_name):
     assert class_idx in range(N_CLASSES)
     return class_idx
 
+
+def check_quality(filename):
+    process = subprocess.Popen(stdout=subprocess.PIPE, args=['identify', '-format', '\'%Q\'', filename])
+    out = process.stdout.read(100).decode()[1:-1]
+    return int(out)
+
 def process_item(item, training, transforms=[[]]):
 
     class_name = item.split('/')[-2]
@@ -283,6 +290,9 @@ def process_item(item, training, transforms=[[]]):
     validation = not training 
 
     img = load_img_fast_jpg(item)
+    quality = check_quality(item)
+    if quality < 95:
+        return None
 
     shape = list(img.shape[:2])
 
@@ -512,8 +522,8 @@ if not (args.test or args.test_train):
             ids_val.extend(idx_to_transfer)
 
         ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER))
-        ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
-        ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
+        # ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
+        # ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
 
 
         random.shuffle(ids_train)
