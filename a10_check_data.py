@@ -4,7 +4,7 @@ __author__ = 'ZFTurbo: https://kaggle.com/zfturbo'
 import hashlib
 import exifread
 from a00_common_functions import *
-
+import re
 
 def md5_from_file(fname):
     hash_md5 = hashlib.md5()
@@ -165,7 +165,7 @@ def prepare_external_dataset(raw_path, output_path):
     return exif_dict
 
 
-def prepare_common_info_csv_for_files(train_path, external_path):
+def prepare_common_info_csv_for_files(train_path, external_path, output_csv):
     from PythonMagick import Image
 
     files = glob.glob(train_path + '**/*.jpg', recursive=True) + \
@@ -194,14 +194,101 @@ def prepare_common_info_csv_for_files(train_path, external_path):
 
     df = pd.DataFrame(info_arr, columns=['filename', 'class', 'is_external', 'model', 'soft', 'quality', 'width', 'height'])
     print(df)
-    df.to_csv(OUTPUT_PATH + 'common_image_info.csv', index=False)
+    df.to_csv(output_csv, index=False)
+
+
+def check_software(soft):
+    if soft == '':
+        return 1
+
+    good_software = [
+        'HDR+',
+        'bullhead',
+        'I9505',
+        'N9005',
+        'N900P',
+        'N900A',
+        'NEX-7',
+        'I545V',
+    ]
+    for g in good_software:
+        if g in soft:
+            return 1
+
+    # iOS version
+    lst = re.findall(r'^\d+\.', soft)
+    if len(lst) > 0:
+        return 1
+
+    return 0
 
 
 def get_valid_fields_from_csv(in_csv, out_csv):
     df = pd.read_csv(in_csv)
+    df.fillna('', inplace=True)
     train_part = df[df['is_external'] == 0]
     print('Train length: {}'.format(len(train_part)))
+    classes = df['class'].unique()
+    valid_resolutions = dict()
+    valid_resolutions_quality = dict()
+    for c in classes:
+        valid_resolutions[c] = dict()
+        valid_resolutions_quality[c] = dict()
 
+    for index, row in train_part.iterrows():
+        c = row['class']
+        width = row['width']
+        height = row['height']
+        quality = row['quality']
+        v1 = (width, height)
+        v2 = (width, height, quality)
+        valid_resolutions[c][v1] = 1
+        valid_resolutions_quality[c][v2] = 1
+
+    valid_res_list = []
+    valid_res_quality_list = []
+    valid_software_list = []
+    for index, row in df.iterrows():
+        c = row['class']
+        width = row['width']
+        height = row['height']
+        quality = row['quality']
+
+        soft = check_software(str(row['soft']))
+        if row['is_external'] == 0:
+            if soft == 0:
+                print('Some error. Check: {}'.format(row))
+
+        v1 = (width, height)
+        v2 = (width, height, quality)
+
+        if v1 in valid_resolutions[c]:
+            valid_res_list.append(1)
+        else:
+            valid_res_list.append(0)
+        if v2 in valid_resolutions_quality[c]:
+            valid_res_quality_list.append(1)
+        else:
+            valid_res_quality_list.append(0)
+        valid_software_list.append(soft)
+
+    df['valid_resolution'] = valid_res_list
+    df['valid_resolution_and_quality'] = valid_res_quality_list
+    df['valid_soft'] = valid_software_list
+    df.to_csv(out_csv, index=False)
+
+
+def show_csv_fields_stats(in_csv):
+    df = pd.read_csv(in_csv)
+    df.fillna('', inplace=True)
+    external_part = df[df['is_external'] == 1]
+    print('External images: {}'.format(len(external_part)))
+    print('Valid resolution: {}'.format(len(external_part[external_part['valid_resolution'] == 1])))
+    print('Valid resolution and quality: {}'.format(len(external_part[external_part['valid_resolution_and_quality'] == 1])))
+    print('Valid software: {}'.format(len(external_part[external_part['valid_soft'] == 1])))
+    print('All checks pass: {}'.format(len(
+        external_part[(external_part['valid_soft'] == 1) & (external_part['valid_resolution_and_quality'] == 1) & (external_part['valid_soft'] == 1)]
+    )))
 
 
 if __name__ == '__main__':
@@ -213,8 +300,9 @@ if __name__ == '__main__':
     # 1st param - location of your directories like 'flickr1', 'val_images' etc
     # 2nd parameter - location where files will be copied. Warning: you need to have sufficient space
     # prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
-    # prepare_common_info_csv_for_files(INPUT_PATH + 'train/', INPUT_PATH + 'external/')
+    prepare_common_info_csv_for_files(INPUT_PATH + 'train/', INPUT_PATH + 'external/', OUTPUT_PATH + 'common_image_info.csv')
     get_valid_fields_from_csv(OUTPUT_PATH + 'common_image_info.csv', OUTPUT_PATH + 'common_image_info_additional.csv')
+    show_csv_fields_stats(OUTPUT_PATH + 'common_image_info_additional.csv')
 
 
 '''
