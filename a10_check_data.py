@@ -312,7 +312,7 @@ if __name__ == '__main__':
     # 1st param - location of your directories like 'flickr1', 'val_images' etc
     # 2nd parameter - location where files will be copied. Warning: you need to have sufficient space
     # prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
-    # prepare_common_info_csv_for_files(INPUT_PATH + 'train/', INPUT_PATH + 'external/', OUTPUT_PATH + 'common_image_info.csv')
+    prepare_common_info_csv_for_files(INPUT_PATH + 'train/', INPUT_PATH + 'external/', OUTPUT_PATH + 'common_image_info.csv')
     get_valid_fields_from_csv(OUTPUT_PATH + 'common_image_info.csv', OUTPUT_PATH + 'common_image_info_additional.csv')
     show_csv_fields_stats(OUTPUT_PATH + 'common_image_info_additional.csv')
 
