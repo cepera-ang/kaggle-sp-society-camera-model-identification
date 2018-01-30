@@ -148,6 +148,35 @@ def get_single_split(fraction=0.9, only_train=False, cache_path=None):
     return train, valid
 
 
+def get_single_split_with_csv_file(fraction=0.9, csv_file='', cache_path=None):
+    if cache_path is None:
+        cache_path = OUTPUT_PATH + 'single_split_{}_{}.pklz'.format(fraction, os.path.basename(csv_file)[:-4])
+
+    if not os.path.isfile(cache_path):
+        df = pd.read_csv(csv_file)
+        files = []
+        for index, row in df.iterrows():
+            if (row['valid_soft'] == 1) & (row['valid_resolution_and_quality'] == 1) & (row['valid_soft'] == 1):
+                files.append(row['filename'])
+        print('Total files for training: {}'.format(len(files)))
+        files = np.array(files)
+        train, valid = train_test_split(files, train_size=fraction, random_state=66)
+        save_in_file((train, valid), cache_path)
+    else:
+        train, valid = load_from_file(cache_path)
+
+    # check all files exists
+    if 1:
+        files = list(train) + list(valid)
+        print('Files in KFold split: {}'.format(len(files)))
+        for f in files:
+            if not os.path.isfile(f):
+                print('File {} is absent!'.format(f))
+                exit()
+
+    return train, valid
+
+
 def save_in_file(arr, file_name):
     pickle.dump(arr, gzip.open(file_name, 'wb+', compresslevel=3))
 

@@ -204,7 +204,7 @@ def create_models(nfolds):
     # TRAINING
     num_fold = 0
     # kfold_split = get_kfold_split(nfolds)
-    single_split = get_single_split(fraction=0.9, only_train=True)
+    single_split = get_single_split_with_csv_file(fraction=0.9, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
     for ids_train, ids_val in [single_split]:
         num_fold += 1
         print('Train files: {}'.format(len(ids_train)))
