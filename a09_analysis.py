@@ -82,7 +82,7 @@ def check_external_resolutions():
         print('Camera: {} Resolutions in external: {}'.format(el, camera_sizes[el]))
 
 
-def test_different_jpeg_readers():
+def tst_different_jpeg_readers():
     import numpy as np
     from PIL import Image
     import jpeg4py as jpeg
@@ -178,7 +178,7 @@ def check_reading_speed():
     files = files[:300]
     print('Files: {}'.format(len(files)))
 
-    if 0:
+    if 1:
         start_time = time.time()
         d = []
         for f in files:
@@ -186,7 +186,7 @@ def check_reading_speed():
             d.append(a)
         print('Time to read {} for libjpeg-turbo: {:.2f} sec'.format(len(files), time.time() - start_time))
 
-    if 0:
+    if 1:
         start_time = time.time()
         d = []
         for f in files:
@@ -197,7 +197,7 @@ def check_reading_speed():
             d.append(b)
         print('Time to read {} for cv2 with conversion: {:.2f} sec'.format(len(files), time.time() - start_time))
 
-    if 0:
+    if 1:
         start_time = time.time()
         d = []
         for f in files:
@@ -205,7 +205,7 @@ def check_reading_speed():
             d.append(b)
         print('Time to read {} for cv2 no conversion: {:.2f} sec'.format(len(files), time.time() - start_time))
 
-    if 0:
+    if 1:
         start_time = time.time()
         d = []
         for f in files:
@@ -214,7 +214,7 @@ def check_reading_speed():
             d.append(c)
         print('Time to read {} for PIL: {:.2f} sec'.format(len(files), time.time() - start_time))
 
-    if 0:
+    if 1:
         start_time = time.time()
         d = []
         plugin = 'freeimage'
@@ -247,7 +247,7 @@ if __name__ == '__main__':
     # get_cameras_quality('external')
     # get_software_exif('external')
     # t, v = get_single_split(fraction=0.9, only_train=True)
-    # test_different_jpeg_readers()
+    # tst_different_jpeg_readers()
     check_reading_speed()
 
 
