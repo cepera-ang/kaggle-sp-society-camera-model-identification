@@ -133,6 +133,22 @@ RESOLUTIONS = {
     11:[[2340, 4160]],
 }
 
+ALL_RESOLUTIONS = [
+    [1520,2688], # flips
+    [3264,2448], # no flips
+    [2432,4320], # flips
+    [3120,4160], # flips
+    [4128,2322], # no flips
+    [3264,2448], # no flips
+    [3024,4032], # flips
+    [1040,780],  # Motorola-Nexus-6 no flips
+    [3088,4130], [3120,4160], # Motorola-Nexus-6 flips
+    [4128,2322], # no flips
+    [6000,4000], # no flips
+    [4160, 2340],
+    [2340, 4160],
+]
+
 ORIENTATION_FLIP_ALLOWED = [
     True,
     False,
@@ -149,6 +165,8 @@ ORIENTATION_FLIP_ALLOWED = [
 for class_id,resolutions in RESOLUTIONS.copy().items():
     resolutions.extend([resolution[::-1] for resolution in resolutions])
     RESOLUTIONS[class_id] = resolutions
+
+ALL_RESOLUTIONS.extend([resolution[::-1] for resolution in ALL_RESOLUTIONS])
 
 MANIPULATIONS = ['jpg70', 'jpg90', 'gamma0.8', 'gamma1.2', 'bicubic0.5', 'bicubic0.8', 'bicubic1.5', 'bicubic2.0']
 
@@ -277,10 +295,11 @@ def get_class(class_name):
     return class_idx
 
 
-def check_quality(filename):
-    process = subprocess.Popen(stdout=subprocess.PIPE, args=['identify', '-format', '\'%Q\'', filename])
+def get_size_quality(filename):
+    process = subprocess.Popen(stdout=subprocess.PIPE, args=['identify', '-format', '\'%W,%H,%Q\'', '-quiet', filename])
     out = process.stdout.read(100).decode()[1:-1]
-    return int(out)
+    w, h, q = out.split(sep=',')
+    return int(w), int(h), int(q)
 
 def process_item(item, training, transforms=[[]]):
 
@@ -289,16 +308,18 @@ def process_item(item, training, transforms=[[]]):
 
     validation = not training 
 
-    img = load_img_fast_jpg(item)
-    quality = check_quality(item)
-    if quality < 95:
+    w, h, q = get_size_quality(item)
+    shape = list((h, w))
+
+    if (q < 95) or (shape not in ALL_RESOLUTIONS):
         return None
 
+    img = load_img_fast_jpg(item)
     shape = list(img.shape[:2])
 
     # # discard images that do not have right resolution
-    if shape not in RESOLUTIONS[class_idx]:
-        return None
+    # if shape not in RESOLUTIONS[class_idx]:
+    #     return None
     # discard only too small images
     # if np.max(shape) < 2000 or np.min(shape) < 1100:
     #     return None
@@ -384,8 +405,11 @@ def gen(items, batch_size, training=True):
 
     # class index
     y = np.empty((batch_size * valid_batch_factor), dtype=np.int64)
-    
-    p = Pool(cpu_count()-2)
+
+    if batch_size > 20:
+        p = Pool(20)
+    else:
+        p = Pool(cpu_count()-2)
 
     transforms = VALIDATION_TRANSFORMS if validation else [[]]
 
@@ -538,8 +562,8 @@ if not (args.test or args.test_train):
     classes_train = [get_class(idx.split('/')[-2]) for idx in ids_train]
     class_weight = class_weight.compute_class_weight('balanced', np.unique(classes_train), classes_train)
 
-    opt = Adam(lr=args.learning_rate)
-    #opt = SGD(lr=args.learning_rate, decay=1e-6, momentum=0.9, nesterov=True)
+    # opt = Adam(lr=args.learning_rate)
+    opt = SGD(lr=args.learning_rate, decay=1e-5, momentum=0.9, nesterov=True)
 
     # TODO: implement this correctly.
     def weighted_loss(weights):
