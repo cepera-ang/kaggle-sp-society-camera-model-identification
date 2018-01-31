@@ -298,6 +298,88 @@ def improve_subm_v1(subm_path, out_path):
     for c in CLASSES:
         checker[c] = [0, 0]
 
+    manip = []
+    for index, row in df.iterrows():
+        if '_manip' in row['fname']:
+            checker[row['camera']][0] += 1
+            manip.append(1)
+        else:
+            checker[row['camera']][1] += 1
+            manip.append(0)
+    df['manip'] = manip
+
+    manip_counts = []
+    raw_counts = []
+    for c in CLASSES:
+        print('{}: {}'.format(c, checker[c]))
+        manip_counts.append((checker[c][0], c))
+        raw_counts.append((checker[c][1], c))
+
+    manip_counts.sort(key=lambda tup: tup[0], reverse=True)
+    raw_counts.sort(key=lambda tup: tup[0], reverse=True)
+    print(manip_counts)
+    print(raw_counts)
+
+    total_iters = 0
+    while 1:
+        total_iters += 1
+
+        checker = dict()
+        for c in CLASSES:
+            checker[c] = [0, 0]
+
+        manip = []
+        for index, row in df.iterrows():
+            if '_manip' in row['fname']:
+                checker[row['camera']][0] += 1
+                manip.append(1)
+            else:
+                checker[row['camera']][1] += 1
+                manip.append(0)
+        df['manip'] = manip
+
+        manip_counts = []
+        raw_counts = []
+        exit_flag = 1
+        for c in CLASSES:
+            print('{}: {}'.format(c, checker[c]))
+            manip_counts.append((checker[c][0], c))
+            raw_counts.append((checker[c][1], c))
+            if checker[c][0] != 132 or checker[c][1] != 132:
+                exit_flag = 0
+
+        if exit_flag == 1 or total_iters > 100:
+            break
+
+        manip_counts.sort(key=lambda tup: tup[0], reverse=True)
+        raw_counts.sort(key=lambda tup: tup[0], reverse=True)
+
+        # only manip data
+        manip = df[df['manip'] == 1]
+        for count, c in manip_counts:
+            class_part = manip[manip['camera'] == c].copy()
+            class_part = class_part.sort_values(c, ascending=False)
+            for i in range(132, len(class_part)):
+                df.loc[class_part.index.values[i], c] = 0.0
+            break
+
+        # only raw data
+        manip = df[df['manip'] == 0]
+        for count, c in manip_counts:
+            class_part = manip[manip['camera'] == c].copy()
+            class_part = class_part.sort_values(c, ascending=False)
+            for i in range(132, len(class_part)):
+                df.loc[class_part.index.values[i], c] = 0.0
+            break
+
+        answ = np.argmax(df[CLASSES].values, axis=1)
+        camera = np.array(CLASSES)[answ]
+        df['camera'] = camera
+
+    checker = dict()
+    for c in CLASSES:
+        checker[c] = [0, 0]
+
     for index, row in df.iterrows():
         if '_manip' in row['fname']:
             checker[row['camera']][0] += 1
@@ -307,7 +389,40 @@ def improve_subm_v1(subm_path, out_path):
     for c in CLASSES:
         print('{}: {}'.format(c, checker[c]))
 
-    # df[['fname', 'camera']].to_csv(out_path, index=False)
+    df[['fname', 'camera']].to_csv(out_path, index=False)
+
+
+def check_subm_distribution(subm_path):
+    df = pd.read_csv(subm_path)
+    checker = dict()
+    for c in CLASSES:
+        checker[c] = [0, 0]
+
+    manip = []
+    for index, row in df.iterrows():
+        if '_manip' in row['fname']:
+            checker[row['camera']][0] += 1
+            manip.append(1)
+        else:
+            checker[row['camera']][1] += 1
+            manip.append(0)
+    df['manip'] = manip
+
+    for c in CLASSES:
+        print('{}: {}'.format(c, checker[c]))
+
+
+def check_subm_diff(s1p, s2p):
+    df1 = pd.read_csv(s1p)
+    df2 = pd.read_csv(s2p)
+    df1.sort_values('fname', inplace=True)
+    df1.reset_index(drop=True, inplace=True)
+    df2.sort_values('fname', inplace=True)
+    df2.reset_index(drop=True, inplace=True)
+    dff = len(df1[df1['camera'] != df2['camera']])
+    total = len(df1)
+    perc = 100 * dff / total
+    print('Difference in {} pos from {}. Percent: {:.2f}%'.format(dff, total, perc))
 
 
 if __name__ == '__main__':
@@ -323,6 +438,8 @@ if __name__ == '__main__':
     # tst_different_jpeg_readers()
     # check_reading_speed()
     improve_subm_v1(SUBM_PATH + '3_sq_mean_raw.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
+    # check_subm_distribution(SUBM_PATH + 'equal_all_fix.csv')
+    check_subm_diff(SUBM_PATH + 'equal_all_fix_0.983.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
 
 
 '''
@@ -343,4 +460,17 @@ Time to read 300 for PIL-simd: 25.81 sec
 Time to read 300 for skimage.io Plugin: freeimage: 27.80 sec
 Time to read 300 for Imageio (no rotate): 24.55 sec
 Time to read 300 for PyVips: 12.61 sec
+
+0.978 subm distribution
+HTC-1-M7: [133, 131]
+iPhone-6: [132, 132]
+Motorola-Droid-Maxx: [131, 133]
+Motorola-X: [133, 131]
+Samsung-Galaxy-S4: [133, 131]
+iPhone-4s: [132, 132]
+LG-Nexus-5x: [126, 138]
+Motorola-Nexus-6: [130, 134]
+Samsung-Galaxy-Note3: [135, 129]
+Sony-NEX-7: [135, 129]
+
 '''

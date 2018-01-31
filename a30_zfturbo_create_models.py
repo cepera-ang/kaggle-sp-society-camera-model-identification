@@ -2,7 +2,7 @@
 
 if __name__ == '__main__':
     import os
-    gpu_use = 3
+    gpu_use = 0
     FOLD_TO_CALC = [gpu_use+1]
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
@@ -271,11 +271,14 @@ def create_models(nfolds):
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.classifier = 'DenseNet121'
-    args.learning_rate = 1e-4
-    args.batch_size = 8
+    args.classifier = 'VGG16'
+    args.learning_rate = 1e-5
+    args.batch_size = 10
     if gpu_use == 3:
         args.batch_size = 6
-    # args.model = MODELS_PATH + 'ResNet50_do0.3_doc0.0_avg-fold_1-epoch007-val_acc0.785386.hdf5'
+    # args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch001-val_acc0.239114.hdf5'
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))
+
+# ResNet50 (Single split + CSV)
+# VGG16 (KFold split + CSV)
