@@ -18,11 +18,10 @@ from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from keras.models import load_model, Model
 from keras.layers import concatenate, Lambda, Input, Dense, Dropout, Flatten, Conv2D, MaxPooling2D, \
         BatchNormalization, Activation, GlobalAveragePooling2D, Reshape
-from keras  .utils import to_categorical
+from keras.utils import to_categorical
 from keras.applications import *
 from keras import backend as K
 from keras.engine.topology import Layer
-import keras
 
 from multi_gpu_keras import multi_gpu_model
 
@@ -81,14 +80,14 @@ parser.add_argument('--check-train', action='store_true', default=False, help='E
 args = parser.parse_args()
 
 TRAIN_FOLDER       = '../input/train'
-EXTRA_TRAIN_FOLDER = '../input/raw/flickr_images'
-NEW_TRAIN_FOLDER   = '../input/raw/flickr_new'
-EXTRA_MOTOX_FOLDER = '../input/raw/moto_x_all'
-EXTRA_VAL_FOLDER   = '../input/raw/val_images'
+EXTRA_TRAIN_FOLDER = '../input/flickr_images'
+NEW_TRAIN_FOLDER   = '../input/flickr_new'
+EXTRA_MOTOX_FOLDER = '../input/moto_x_all'
+EXTRA_VAL_FOLDER   = '../input/val_images'
 TEST_FOLDER        = '../input/test'
-MODEL_FOLDER       = '../output/models'
-SUBMITS_FOLDER     = '../output/submits'
-PROBS_FOLDER       = '../output/probs'
+MODEL_FOLDER       = './models'
+SUBMITS_FOLDER     = './submits'
+PROBS_FOLDER       = './probs'
 
 CROP_SIZE = args.crop_size
 CLASSES = [
@@ -128,8 +127,6 @@ RESOLUTIONS = {
         [3088,4130], [3120,4160]], # Motorola-Nexus-6 flips
     8: [[4128,2322]], # no flips 
     9: [[6000,4000]], # no flips
-    10:[[4160, 2340]],
-    11:[[2340, 4160]],
 }
 
 ORIENTATION_FLIP_ALLOWED = [
@@ -287,11 +284,11 @@ def process_item(item, training, transforms=[[]]):
     shape = list(img.shape[:2])
 
     # # discard images that do not have right resolution
-    if shape not in RESOLUTIONS[class_idx]:
-        return None
+    #if shape not in RESOLUTIONS[class_idx]:
+    #    return None
     # discard only too small images
-    # if np.max(shape) < 2000 or np.min(shape) < 1100:
-    #     return None
+    #if np.max(shape) < 2000 or np.min(shape) < 1100:
+    #    return None
     # some images may not be downloaded correclty and are B/W, discard those
 
     # some images may not be downloaded correctly and are B/W, discard those
@@ -413,20 +410,11 @@ def gen(items, batch_size, training=True):
 # MAIN
 if args.model:
     print("Loading model " + args.model)
+
+    model = load_model(args.model, compile=False)
     # e.g. DenseNet201_do0.3_doc0.0_avg-epoch128-val_acc0.964744.hdf5
     match = re.search(r'(([a-zA-Z0-9]+)_[A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.model)
     model_name = match.group(1)
-    if match.group(2) == 'MobileNet':
-        from keras.utils.generic_utils import CustomObjectScope
-
-        with CustomObjectScope({'relu6': keras.applications.mobilenet.relu6,
-                                'DepthwiseConv2D': keras.applications.mobilenet.DepthwiseConv2D}):
-            model = load_model(args.model, compile=False)
-
-    else:
-        model = load_model(args.model, compile=False)
-
-
     args.classifier = match.group(2)
     CROP_SIZE = args.crop_size  = model.get_input_shape_at(0)[0][1]
     print("Overriding classifier: {} and crop size: {}".format(args.classifier, args.crop_size))
@@ -494,6 +482,24 @@ if not (args.test or args.test_train):
     else:
         ids_train = ids
         ids_val   = [ ]
+        # print(0,len(ids_train))
+        # ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER))
+        # print(1,len(ids_train))
+        # ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
+        # print(2,len(ids_train))
+        # ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
+        # print(3,len(ids_train))
+        # ids_train = [c for c in ids_train if isfile(c)]
+        # print(4,len(ids_train))
+        
+        df = pd.read_csv("common_image_info_additional.csv")
+
+        ids_train = [c.replace('\\',"/") for c in df[(df["valid_soft"]==1)&(df["valid_resolution_and_quality"]==1)]["filename"]]
+
+        for x in ids_train:
+            if not isfile(x):
+                print("Missing:", x)
+        
         extra_val_ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
         extra_val_ids.sort()
         ids_val.extend(extra_val_ids)
@@ -510,11 +516,6 @@ if not (args.test or args.test_train):
             ids_train = list(set(ids_train).difference(set(idx_to_transfer)))
 
             ids_val.extend(idx_to_transfer)
-
-        ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER))
-        ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
-        ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
-
 
         random.shuffle(ids_train)
         random.shuffle(ids_val)
@@ -565,7 +566,7 @@ else:
     if args.test:
         ids = glob.glob(join(TEST_FOLDER,'*.tif'))
     elif args.test_train:
-        ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
+        ids = glob.glob(join(TRAIN_FOLDER,'*/*.jpg'))
     else:
         assert False
 
@@ -574,11 +575,11 @@ else:
     from conditional import conditional
     submission_file = 'submission {}.csv'.format(args.model.split(sep='/')[-1])
     with conditional(args.test, open(join(SUBMITS_FOLDER, submission_file), 'w')) as csvfile:
-        classes = []
 
         if args.test:
             csv_writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['fname','camera'])
+            classes = []
         else:
             correct_predictions = 0
         
@@ -589,7 +590,7 @@ else:
         for i, idx in enumerate(tqdm(ids)):
             #fnames.append(idx.split("/")[-1])
             img = np.array(Image.open(idx))
-            if args.test_train or args.classifier == 'MobileNet':
+            if args.test_train:
                 img = get_crop(img, CROP_SIZE, random_crop=False)
 
             manipulated = np.float32([1. if idx.find('manip') != -1 else 0.])
@@ -622,8 +623,8 @@ else:
             probs = np.vstack((probs, prediction))
             if prediction.shape[0] != 1: # TTA
                 #prediction = np.mean(prediction, axis=0)
-                prediction = np.max(prediction, axis=0)
-                #prediction = np.sqrt((np.mean(prediction**2, axis=0))
+                #prediction = np.max(prediction, axis=0)
+                prediction = np.sqrt(np.mean(prediction**2, axis=0))
                 #prediction = scipy.stats.mstats.gmean(prediction, axis=0)
             
             #print(prediction)
@@ -648,8 +649,7 @@ else:
         
         if args.test_train:
             print("Accuracy: " + str(correct_predictions / len(ids)))
-            classes.append(prediction_class_idx)
-
+            
         if args.test:
             print("Test set predictions distribution:")
             print_distribution(None, classes=classes)
