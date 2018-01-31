@@ -2,11 +2,11 @@
 
 if __name__ == '__main__':
     import os
-    gpu_use = 0
+    gpu_use = 2
     FOLD_TO_CALC = [gpu_use+1]
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
 
 
 from a01_random_augmentations import *
@@ -78,9 +78,8 @@ def gen(items, batch_size, training=True):
     # class index
     y = np.empty((batch_size * valid_batch_factor), dtype=np.int64)
 
-    if 1:
-        # p = Pool(cpu_count()-2)
-        p = ThreadPool(6)
+    p = ThreadPool(cpu_count() - 2)
+    # p = ThreadPool(8)
 
     transforms = VALIDATION_TRANSFORMS if validation else [[]]
 
@@ -89,21 +88,13 @@ def gen(items, batch_size, training=True):
         if training:
             random.shuffle(items)
 
-        if 1:
-            process_item_func = partial(process_item, training=training, transforms=transforms, crop_size=CROP_SIZE, classifier=args.classifier)
+        process_item_func = partial(process_item, training=training, transforms=transforms, crop_size=CROP_SIZE, classifier=args.classifier)
 
         batch_idx = 0
         iter_items = iter(items)
         for item_batch in iter(lambda:list(islice(iter_items, batch_size)), []):
 
-            if 1:
-                batch_results = p.map(process_item_func, item_batch)
-            else:
-                batch_results = []
-                for it in item_batch:
-                    b = process_item(it, training=training, transforms=transforms, crop_size=CROP_SIZE, classifier=args.classifier)
-                    batch_results.append(b)
-
+            batch_results = p.map(process_item_func, item_batch)
             for batch_result in batch_results:
 
                 if batch_result is not None:
@@ -141,7 +132,7 @@ def create_models(nfolds):
     from keras.models import load_model, Model
     from keras.layers import concatenate, Lambda, Input, Dense, Dropout, Flatten, Conv2D, MaxPooling2D, \
         BatchNormalization, Activation, GlobalAveragePooling2D, Reshape
-    from multi_gpu_keras import multi_gpu_model
+    from a00_multi_gpu_keras import multi_gpu_model
 
     # MAIN
     if args.model:
@@ -198,7 +189,7 @@ def create_models(nfolds):
             last_epoch = int(match.group(2))
 
     model.summary()
-    # model = multi_gpu_model(model, gpus=args.gpus)
+    model = multi_gpu_model(model, gpus=args.gpus)
 
     # TRAINING
     num_fold = 0
@@ -209,10 +200,6 @@ def create_models(nfolds):
         num_fold += 1
         print('Train files: {}'.format(len(ids_train)))
         print('Valid files: {}'.format(len(ids_val)))
-
-        if 'FOLD_TO_CALC' in globals():
-            if num_fold not in FOLD_TO_CALC:
-                continue
 
         ids_train = list(ids_train)
         ids_val = list(ids_val)
@@ -256,7 +243,7 @@ def create_models(nfolds):
                 max_queue_size=40,
                 use_multiprocessing=False,
                 workers=1,
-                verbose=2,
+                verbose=1,
                 class_weight=class_weight1)
 
         max_acc = max(history.history[monitor])
@@ -273,12 +260,19 @@ def create_models(nfolds):
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.classifier = 'VGG16'
-    args.learning_rate = 1e-5
-    args.batch_size = 10
-    if gpu_use == 3:
-        args.batch_size = 6
+    if 0:
+        args.classifier = 'ResNet50'
+        args.gpus = [0, 1, 2, 3]
+        args.learning_rate = 1e-5 * len(args.gpus)
+        args.batch_size = 6 * len(args.gpus)
+    if 1:
+        args.classifier = 'VGG16'
+        args.gpus = [0, 1, 2, 3]
+        args.learning_rate = 1e-5 * len(args.gpus)
+        args.batch_size = 8 * len(args.gpus)
+
     # args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch001-val_acc0.239114.hdf5'
+    print('Batch size: {} Learning rate: {}'.format(args.batch_size, args.learning_rate))
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))
 
