@@ -2,11 +2,10 @@
 
 if __name__ == '__main__':
     import os
-    gpu_use = 2
-    FOLD_TO_CALC = [gpu_use+1]
+    gpu_use = "0, 2"
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
+    os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
 
 
 from a01_random_augmentations import *
@@ -243,7 +242,7 @@ def create_models(nfolds):
                 max_queue_size=40,
                 use_multiprocessing=False,
                 workers=1,
-                verbose=1,
+                verbose=2,
                 class_weight=class_weight1)
 
         max_acc = max(history.history[monitor])
@@ -265,18 +264,18 @@ if __name__ == '__main__':
         args.gpus = [0, 1, 2, 3]
         args.learning_rate = 1e-5 * len(args.gpus)
         args.batch_size = 6 * len(args.gpus)
-    if 0:
+    if 1:
         args.classifier = 'VGG16'
-        args.gpus = [0, 1, 2, 3]
+        args.gpus = [0, 1]
         args.learning_rate = 1e-5 * len(args.gpus)
         args.batch_size = 8 * len(args.gpus)
-    if 1:
+    if 0:
         args.classifier = 'DenseNet121'
         args.gpus = [0, 1, 2, 3]
         args.learning_rate = 1e-5 * len(args.gpus)
         args.batch_size = 6 * len(args.gpus)
 
-    # args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch001-val_acc0.239114.hdf5'
+    args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch002-val_acc0.250679.hdf5'
     print('Batch size: {} Learning rate: {}'.format(args.batch_size, args.learning_rate))
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))
