@@ -202,9 +202,10 @@ def create_models(nfolds):
 
     # TRAINING
     num_fold = 0
-    kfold_split = get_kfold_split_with_csv_file(nfolds, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
+    # kfold_split = get_kfold_split_with_csv_file(nfolds, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
     # single_split = get_single_split_with_csv_file(fraction=0.9, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
-    for ids_train, ids_val in kfold_split:
+    single_split = get_single_split_final(OUTPUT_PATH + 'common_image_info_additional.csv', OUTPUT_PATH + 'validation_files.pklz')
+    for ids_train, ids_val in [single_split]:
         num_fold += 1
         print('Train files: {}'.format(len(ids_train)))
         print('Valid files: {}'.format(len(ids_val)))
@@ -255,6 +256,7 @@ def create_models(nfolds):
                 max_queue_size=40,
                 use_multiprocessing=False,
                 workers=1,
+                verbose=2,
                 class_weight=class_weight1)
 
         max_acc = max(history.history[monitor])

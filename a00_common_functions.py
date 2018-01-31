@@ -231,7 +231,6 @@ def get_single_split_final(all_correct_files, validation_files):
         exit()
     return files, val
 
-# ../input/train\\Sony-NEX-7\\(Nex7)99.JPG
 
 def save_in_file(arr, file_name):
     pickle.dump(arr, gzip.open(file_name, 'wb+', compresslevel=3))
