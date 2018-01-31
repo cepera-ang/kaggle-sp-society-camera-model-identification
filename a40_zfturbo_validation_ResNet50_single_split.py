@@ -3,7 +3,6 @@
 if __name__ == '__main__':
     import os
     gpu_use = 1
-    FOLD_TO_CALC = [gpu_use+1]
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
     os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
@@ -98,12 +97,13 @@ def run_validation_single():
 
     # single_split = get_single_split(fraction=0.9)
     # single_split = get_single_split_with_csv_file(fraction=0.9, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
-    kfold_split = get_kfold_split_with_csv_file(4, OUTPUT_PATH + 'common_image_info_additional.csv')
+    # kfold_split = get_kfold_split_with_csv_file(4, OUTPUT_PATH + 'common_image_info_additional.csv')
+    single_split = get_single_split_final(OUTPUT_PATH + 'common_image_info_additional.csv',
+                                          OUTPUT_PATH + 'validation_files.pklz')
     if args.test:
         ids = glob.glob(join(INPUT_PATH, 'test/*.tif'))
     elif args.test_train:
-        # ids = single_split[1]
-        ids = kfold_split[fold_num-1][1]
+        ids = list(single_split[1])
         # ids = ids
     else:
         assert False
@@ -203,7 +203,7 @@ def run_validation_single():
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch042-val_acc0.887476.hdf5'
+    args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch002-val_acc0.250679.hdf5'
 
     # Validation
     args.test_train = True
