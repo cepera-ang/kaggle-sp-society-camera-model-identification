@@ -265,11 +265,16 @@ if __name__ == '__main__':
         args.gpus = [0, 1, 2, 3]
         args.learning_rate = 1e-5 * len(args.gpus)
         args.batch_size = 6 * len(args.gpus)
-    if 1:
+    if 0:
         args.classifier = 'VGG16'
         args.gpus = [0, 1, 2, 3]
         args.learning_rate = 1e-5 * len(args.gpus)
         args.batch_size = 8 * len(args.gpus)
+    if 1:
+        args.classifier = 'DenseNet121'
+        args.gpus = [0, 1, 2, 3]
+        args.learning_rate = 1e-5 * len(args.gpus)
+        args.batch_size = 6 * len(args.gpus)
 
     # args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch001-val_acc0.239114.hdf5'
     print('Batch size: {} Learning rate: {}'.format(args.batch_size, args.learning_rate))
