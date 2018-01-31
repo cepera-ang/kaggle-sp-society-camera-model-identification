@@ -437,9 +437,10 @@ if __name__ == '__main__':
     # t, v = get_single_split(fraction=0.9, only_train=True)
     # tst_different_jpeg_readers()
     # check_reading_speed()
-    improve_subm_v1(SUBM_PATH + '3_sq_mean_raw.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
+    # improve_subm_v1(SUBM_PATH + '3_sq_mean_raw.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
     # check_subm_distribution(SUBM_PATH + 'equal_all_fix.csv')
-    check_subm_diff(SUBM_PATH + 'equal_all_fix_0.983.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
+    # check_subm_diff(SUBM_PATH + 'equal_all_fix_0.983.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
+    get_single_split_final(OUTPUT_PATH + 'common_image_info_additional.csv', OUTPUT_PATH + 'validation_files.pklz')
 
 
 '''

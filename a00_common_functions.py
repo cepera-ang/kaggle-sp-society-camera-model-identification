@@ -212,6 +212,27 @@ def get_single_split_with_csv_file(fraction=0.9, csv_file='', cache_path=None):
     return train, valid
 
 
+def get_single_split_final(all_correct_files, validation_files):
+    cor = pd.read_csv(all_correct_files)
+    val = set(load_from_file(validation_files))
+
+    files = []
+    excluded_files = 0
+    for index, row in cor.iterrows():
+        if (row['valid_soft'] == 1) & (row['valid_resolution_and_quality'] == 1) & (row['valid_soft'] == 1):
+            if row['filename'] not in val:
+                files.append(row['filename'])
+            else:
+                excluded_files += 1
+    print('Total files for training: {}'.format(len(files)))
+    print('Excluded due to validation: {}'.format(excluded_files))
+    if excluded_files != 750:
+        print('Some problem here!')
+        exit()
+    return files, val
+
+# ../input/train\\Sony-NEX-7\\(Nex7)99.JPG
+
 def save_in_file(arr, file_name):
     pickle.dump(arr, gzip.open(file_name, 'wb+', compresslevel=3))
 

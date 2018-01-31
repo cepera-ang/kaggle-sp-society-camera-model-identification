@@ -91,37 +91,49 @@ def run_validation_single():
     # e.g. ResNet50_do0.3_doc0.0_avg-fold_1-epoch053-val_acc0.911957.hdf5
     match = re.search(r'(([a-zA-Z0-9]+)_[A-Za-z_\d\.]+)-fold_(\d+)-epoch(\d+)-.*\.hdf5', args.model)
     args.classifier = match.group(2)
+    fold_num = int(match.group(3))
     CROP_SIZE = args.crop_size  = model.get_input_shape_at(0)[0][1]
-    print("Overriding classifier: {} and crop size: {}".format(args.classifier, args.crop_size))
+    print("Overriding classifier: {} and crop size: {} and fold num: {}".format(args.classifier, args.crop_size, fold_num))
     model.summary()
 
-    single_split = get_single_split_with_csv_file(fraction=0.9, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
+    # single_split = get_single_split(fraction=0.9)
+    # single_split = get_single_split_with_csv_file(fraction=0.9, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
+    kfold_split = get_kfold_split_with_csv_file(4, OUTPUT_PATH + 'common_image_info_additional.csv')
     if args.test:
         ids = glob.glob(join(INPUT_PATH, 'test/*.tif'))
     elif args.test_train:
-        ids = single_split[1]
+        # ids = single_split[1]
+        ids = kfold_split[fold_num-1][1]
+        # ids = ids
     else:
         assert False
 
-    print('Validation files: {}'.format(len(ids)))
+    print('Files to process: {}'.format(len(ids)))
     ids.sort()
 
+    correct_predictions = 0
     submission_file = 'submission_{}.csv'.format(args.model.split(sep='/')[-1])
     with conditional(args.test, open(join(SUBM_PATH, submission_file), 'w')) as csvfile:
         if args.test:
-            csv_writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+            csv_writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['fname', 'camera'])
             classes = []
-        else:
-            correct_predictions = 0
 
         fnames = []
+        real_class = []
         labels = []
         aug = []
         probs = np.array([]*10).reshape((0,10))
         for i, idx in enumerate(tqdm(ids)):
             #fnames.append(idx.split("/")[-1])
-            img = np.array(Image.open(idx))
+            if 0:
+                img = np.array(Image.open(idx))
+            else:
+                img = pyvips.Image.new_from_file(idx, access='sequential')
+                img = np.ndarray(buffer=img.write_to_memory(),
+                                 dtype=np.uint8,
+                                 shape=[img.height, img.width, img.bands])
+
             if args.test_train:
                 img = get_crop(img, CROP_SIZE, random_crop=False)
 
@@ -136,7 +148,7 @@ def run_validation_single():
             timg = cv2.transpose(img)
             for _img in [img, cv2.flip(img, 0), cv2.flip(img, 1), cv2.flip(img, -1),
                         timg, cv2.flip(timg, 0), cv2.flip(timg, 1), cv2.flip(timg, -1)]:
-                img_batch[j]         = preprocess_image(_img)
+                img_batch[j]         = preprocess_image(_img, classifier=args.classifier)
                 manipulated_batch[j] = manipulated
                 fnames.append(idx.split("/")[-1])
                 aug.append(j)
@@ -156,12 +168,13 @@ def run_validation_single():
             if prediction.shape[0] != 1: # TTA
                 prediction = np.mean(prediction, axis=0)
                 # prediction = np.sqrt(np.mean(prediction**2, axis=0))
-                #prediction = scipy.stats.mstats.gmean(prediction, axis=0)
+                # prediction = scipy.stats.mstats.gmean(prediction, axis=0)
 
             prediction_class_idx = np.argmax(prediction)
 
             if args.test_train:
                 class_idx = get_class(os.path.basename(os.path.dirname(idx)))
+                real_class.append(class_idx)
                 if class_idx == prediction_class_idx:
                     correct_predictions += 1
 
@@ -173,8 +186,12 @@ def run_validation_single():
         ans["name"] = fnames
         ans["aug"] = aug
         for i in range(10):
-            ans[CLASSES[i]] = probs[:,i]
-        pd.DataFrame(ans).to_hdf(SUBM_PATH + "/tta_8_"+args.model.split("/")[-1], "prob")
+            ans[CLASSES[i]] = probs[:, i]
+        if args.test_train:
+            out_path = SUBM_PATH + "/tta_8_" + os.path.basename(args.model) + '_train.csv'
+        else:
+            out_path = SUBM_PATH + "/tta_8_" + os.path.basename(args.model) + '_test.csv'
+        pd.DataFrame(ans).to_csv(out_path, index=False)
 
         if args.test_train:
             print("Accuracy: " + str(correct_predictions / len(ids)))
@@ -186,9 +203,16 @@ def run_validation_single():
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.classifier = 'ResNet50'
-    args.batch_size = 10
+    args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch042-val_acc0.887476.hdf5'
+
+    # Validation
     args.test_train = True
-    args.model = MODELS_PATH + 'ResNet50_do0.3_doc0.0_avg-fold_1-epoch053-val_acc0.911957.hdf5'
-    score, thr = run_validation_single()
-    print('Score: {} THR: {} Time: {:.0f} sec'.format(round(score, 6), thr, time.time() - start_time))
+    args.test = None
+    run_validation_single()
+
+    # Test
+    args.test_train = None
+    args.test = True
+    run_validation_single()
+
+    print('Time: {:.0f} sec'.format(time.time() - start_time))
