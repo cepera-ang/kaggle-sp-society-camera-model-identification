@@ -276,76 +276,77 @@ def proc_tst_and_create_subm():
     print('Files to process: {}'.format(len(ids)))
     ids.sort()
 
-    submission_file = 'submission_{}.csv'.format(args.model.split(sep='/')[-1])
-    with conditional(args.test, open(join(SUBM_PATH, submission_file), 'w')) as csvfile:
-        if args.test:
-            csv_writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            csv_writer.writerow(['fname', 'camera'])
-            classes = []
+    submission_file = SUBM_PATH + 'submission_{}.csv'.format(args.model.split(sep='/')[-1])
+    csvfile = open(submission_file, 'w')
+    csv_writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+    csv_writer.writerow(['fname', 'camera'])
+    classes = []
 
-        fnames = []
-        aug = []
-        probs = np.array([]*10).reshape((0, 10))
-        for i, idx in enumerate(tqdm(ids)):
+    fnames = []
+    aug = []
+    probs = np.array([]*10).reshape((0, 10))
+    for i, idx in enumerate(tqdm(ids)):
+        img = np.array(Image.open(idx))
+        manipulated = np.float32([1. if idx.find('manip') != -1 else 0.])
+        sx = img.shape[1] // CROP_SIZE
+        sy = img.shape[0] // CROP_SIZE
+        j = 0
+        k = 8
+        img_batch = np.zeros((k * sx * sy, CROP_SIZE, CROP_SIZE, 3), dtype=np.float32)
+        manipulated_batch = np.zeros((k * sx * sy, 1),  dtype=np.float32)
+        timg = cv2.transpose(img)
+        for _img in [img, cv2.flip(img, 0), cv2.flip(img, 1), cv2.flip(img, -1),
+                    timg, cv2.flip(timg, 0), cv2.flip(timg, 1), cv2.flip(timg, -1)]:
+            img_batch[j] = preprocess_image(_img, classifier=args.classifier)
+            manipulated_batch[j] = manipulated
+            fnames.append(idx.split("/")[-1])
+            aug.append(j)
+            j += 1
 
-            img = np.array(Image.open(idx))
-            manipulated = np.float32([1. if idx.find('manip') != -1 else 0.])
-            sx = img.shape[1] // CROP_SIZE
-            sy = img.shape[0] // CROP_SIZE
-            j = 0
-            k = 8
-            img_batch = np.zeros((k * sx * sy, CROP_SIZE, CROP_SIZE, 3), dtype=np.float32)
-            manipulated_batch = np.zeros((k * sx * sy, 1),  dtype=np.float32)
-            timg = cv2.transpose(img)
-            for _img in [img, cv2.flip(img, 0), cv2.flip(img, 1), cv2.flip(img, -1),
-                        timg, cv2.flip(timg, 0), cv2.flip(timg, 1), cv2.flip(timg, -1)]:
-                img_batch[j] = preprocess_image(_img, classifier=args.classifier)
-                manipulated_batch[j] = manipulated
-                fnames.append(idx.split("/")[-1])
-                aug.append(j)
-                j += 1
+        l = img_batch.shape[0]
+        batch_size = args.batch_size
+        for i in range(l//batch_size+1):
+            batch_pred = model.predict_on_batch([img_batch[i*batch_size:min(l,(i+1)*batch_size)],
+                                                 manipulated_batch[i*batch_size:min(l,(i+1)*batch_size)]])
+            if i == 0:
+                prediction = batch_pred
+            else:
+                prediction = np.concatenate((prediction, batch_pred), axis=0)
 
-            l = img_batch.shape[0]
-            batch_size = args.batch_size
-            for i in range(l//batch_size+1):
-                batch_pred = model.predict_on_batch([img_batch[i*batch_size:min(l,(i+1)*batch_size)],
-                                                     manipulated_batch[i*batch_size:min(l,(i+1)*batch_size)]])
-                if i == 0:
-                    prediction = batch_pred
-                else:
-                    prediction = np.concatenate((prediction, batch_pred), axis=0)
+        probs = np.vstack((probs, prediction))
+        if prediction.shape[0] != 1: # TTA
+            prediction = np.mean(prediction, axis=0)
+            # prediction = np.sqrt(np.mean(prediction**2, axis=0))
+            # prediction = scipy.stats.mstats.gmean(prediction, axis=0)
 
-            probs = np.vstack((probs, prediction))
-            if prediction.shape[0] != 1: # TTA
-                prediction = np.mean(prediction, axis=0)
-                # prediction = np.sqrt(np.mean(prediction**2, axis=0))
-                # prediction = scipy.stats.mstats.gmean(prediction, axis=0)
+        prediction_class_idx = np.argmax(prediction)
+        csv_writer.writerow([os.path.basename(idx), CLASSES[prediction_class_idx]])
+        classes.append(prediction_class_idx)
 
-            prediction_class_idx = np.argmax(prediction)
-            csv_writer.writerow([os.path.basename(idx), CLASSES[prediction_class_idx]])
-            classes.append(prediction_class_idx)
+    ans = pd.DataFrame()
+    ans["name"] = fnames
+    ans["aug"] = aug
+    for i in range(10):
+        ans[CLASSES[i]] = probs[:, i]
+    out_path = SUBM_PATH + "/tta_8_" + os.path.basename(args.model) + '_test.csv'
+    pd.DataFrame(ans).to_csv(out_path, index=False)
 
-        ans = pd.DataFrame()
-        ans["name"] = fnames
-        ans["aug"] = aug
-        for i in range(10):
-            ans[CLASSES[i]] = probs[:, i]
-        out_path = SUBM_PATH + "/tta_8_" + os.path.basename(args.model) + '_test.csv'
-        pd.DataFrame(ans).to_csv(out_path, index=False)
+    print("Test set predictions distribution:")
+    print_distribution(None, classes=classes)
 
-        print("Test set predictions distribution:")
-        print_distribution(None, classes=classes)
+    csvfile.close()
     check_subm_distribution(submission_file)
 
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.model = MODELS_PATH + 'DenseNet121_do0.3_doc0.0_avg-fold_1-epoch038-val_acc0.957143.hdf5'
+    args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch033-val_acc0.943614.hdf5'
 
-    # Validation
-    args.test_train = True
-    args.test = None
-    run_validation_single()
+    if 0:
+        # Validation
+        args.test_train = True
+        args.test = None
+        run_validation_single()
 
     # Test
     args.test_train = None
