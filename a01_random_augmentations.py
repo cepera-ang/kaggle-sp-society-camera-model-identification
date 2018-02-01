@@ -53,7 +53,7 @@ def random_manipulation(img, manipulation=None):
         im_decoded = np.uint8(cv2.pow(img / 255., gamma)*255.)
     elif manipulation.startswith('bicubic'):
         scale = float(manipulation[7:])
-        im_decoded = cv2.resize(img,(0,0), fx=scale, fy=scale, interpolation = cv2.INTER_CUBIC)
+        im_decoded = cv2.resize(img, (0, 0), fx=scale, fy=scale, interpolation = cv2.INTER_CUBIC)
     else:
         assert False
     return im_decoded
@@ -158,7 +158,7 @@ def process_item(item, training, transforms=[[]], crop_size=512, classifier='Res
 
         # some images are landscape, others are portrait, so augment training by randomly changing orientation
         if ((np.random.rand() < 0.5) and training and ORIENTATION_FLIP_ALLOWED[class_idx]) or force_orientation:
-            img = np.rot90(_img, 1, (0,1))
+            img = np.rot90(_img, 1, (0, 1))
             # is it rot90(..3..), rot90(..1..) or both?
             # for phones with landscape mode pics could be taken upside down too, although less likely
             # most of the test images that are flipped are 1

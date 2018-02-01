@@ -438,9 +438,9 @@ if __name__ == '__main__':
     # tst_different_jpeg_readers()
     # check_reading_speed()
     # improve_subm_v1(SUBM_PATH + '3_sq_mean_raw.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
-    # check_subm_distribution(SUBM_PATH + 'equal_all_fix.csv')
-    # check_subm_diff(SUBM_PATH + 'equal_all_fix_0.983.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
-    get_single_split_final(OUTPUT_PATH + 'common_image_info_additional.csv', OUTPUT_PATH + 'validation_files.pklz')
+    check_subm_distribution(SUBM_PATH + 'submission_VGG16_do0.3_doc0.0_avg-fold_1-epoch033-val_acc0.943614.hdf5.csv')
+    check_subm_diff(SUBM_PATH + 'equal_all_fix_0.983.csv', SUBM_PATH + 'submission_VGG16_do0.3_doc0.0_avg-fold_1-epoch033-val_acc0.943614.hdf5.csv')
+    # get_single_split_final(OUTPUT_PATH + 'common_image_info_additional.csv', OUTPUT_PATH + 'validation_files.pklz')
 
 
 '''
