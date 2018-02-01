@@ -232,9 +232,11 @@ def run_validation_single():
     for m in MANIPULATIONS:
         print('{}: {}'.format(m, manipulation_stat[m]))
 
-    print("Accuracy no manipulation: " + str(correct_predictions_no_manip / len(ids)))
-    print("Accuracy with manipulation: " + str(correct_predictions_with_manip / len(ids)))
-    print("Accuracy overall: " + str((correct_predictions_no_manip + correct_predictions_with_manip) / (2*len(ids))))
+    correct_predictions_no_manip /= len(ids)
+    correct_predictions_with_manip /= len(ids)
+    print("Accuracy no manipulation: " + str(correct_predictions_no_manip))
+    print("Accuracy with manipulation: " + str(correct_predictions_with_manip))
+    print("Accuracy overall: " + str((0.7 * correct_predictions_no_manip + 0.3 * correct_predictions_with_manip)))
 
 
 def check_subm_distribution(subm_path):
@@ -333,7 +335,7 @@ def proc_test_and_create_subm():
 
         print("Test set predictions distribution:")
         print_distribution(None, classes=classes)
-        check_subm_distribution(submission_file)
+    check_subm_distribution(submission_file)
 
 
 if __name__ == '__main__':
