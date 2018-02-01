@@ -2,7 +2,7 @@
 
 if __name__ == '__main__':
     import os
-    gpu_use = 1
+    gpu_use = 3
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
     os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
@@ -259,7 +259,7 @@ def check_subm_distribution(subm_path):
         print('{}: {}'.format(c, checker[c]))
 
 
-def proc_test_and_create_subm():
+def proc_tst_and_create_subm():
     from conditional import conditional
 
     print("Loading model " + args.model)
@@ -340,7 +340,7 @@ def proc_test_and_create_subm():
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch033-val_acc0.943614.hdf5'
+    args.model = MODELS_PATH + 'DenseNet121_do0.3_doc0.0_avg-fold_1-epoch038-val_acc0.957143.hdf5'
 
     # Validation
     args.test_train = True
@@ -350,6 +350,6 @@ if __name__ == '__main__':
     # Test
     args.test_train = None
     args.test = True
-    proc_test_and_create_subm()
+    proc_tst_and_create_subm()
 
     print('Time: {:.0f} sec'.format(time.time() - start_time))
