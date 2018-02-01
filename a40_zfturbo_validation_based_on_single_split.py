@@ -234,9 +234,9 @@ def run_validation_single():
 
     correct_predictions_no_manip /= len(ids)
     correct_predictions_with_manip /= len(ids)
-    print("Accuracy no manipulation: " + str(correct_predictions_no_manip))
-    print("Accuracy with manipulation: " + str(correct_predictions_with_manip))
-    print("Accuracy overall: " + str((0.7 * correct_predictions_no_manip + 0.3 * correct_predictions_with_manip)))
+    print("Accuracy no manipulation: {:.6f}".format(correct_predictions_no_manip))
+    print("Accuracy with manipulation: {:.6f}".format(correct_predictions_with_manip))
+    print("Accuracy overall: {:.6f}".format((0.7 * correct_predictions_no_manip + 0.3 * correct_predictions_with_manip)))
 
 
 def check_subm_distribution(subm_path):
