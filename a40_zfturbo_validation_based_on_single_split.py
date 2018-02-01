@@ -117,15 +117,15 @@ def run_validation_single():
         print('Go for {}'.format(idx))
         #fnames.append(idx.split("/")[-1])
         if 0:
-            img = np.array(Image.open(idx))
+            img_orig = np.array(Image.open(idx))
         else:
-            img = pyvips.Image.new_from_file(idx, access='sequential')
-            img = np.ndarray(buffer=img.write_to_memory(),
+            img_orig = pyvips.Image.new_from_file(idx, access='sequential')
+            img_orig = np.ndarray(buffer=img_orig.write_to_memory(),
                              dtype=np.uint8,
-                             shape=[img.height, img.width, img.bands])
+                             shape=[img_orig.height, img_orig.width, img_orig.bands])
 
         # Исходный вариант
-        img_init = get_crop(img, CROP_SIZE, random_crop=False)
+        img_init = get_crop(img_orig, CROP_SIZE, random_crop=False)
         sx = img_init.shape[1] // (CROP_SIZE)
         sy = img_init.shape[0] // (CROP_SIZE)
         j = 0
@@ -170,55 +170,56 @@ def run_validation_single():
         print('Prediction no manip: {} Prob: {:.4f}'.format(np.argmax(pred_no_manip), pred_no_manip[np.argmax(pred_no_manip)]))
         print('Prediction real: {} [Correct: {}]'.format(class_idx, correct_str))
 
-        # Случайная манипуляция
-        img_init = get_crop(img, 2 * CROP_SIZE, random_crop=False)
-        sx = img_init.shape[1] // (2 * CROP_SIZE)
-        sy = img_init.shape[0] // (2 * CROP_SIZE)
-        j = 0
-        k = 8
-        img_batch = np.zeros((k * sx * sy, CROP_SIZE, CROP_SIZE, 3), dtype=np.float32)
-        manipulated_batch = np.zeros((k * sx * sy, 1), dtype=np.float32)
-        manipulated = 1.0
-        m = random.choice(MANIPULATIONS)
-        img = random_manipulation(img_init.copy(), m)
-        img = get_crop(img, CROP_SIZE, random_crop=False)
+        # Все манипуляции
+        for m in MANIPULATIONS:
+            img_init = get_crop(img_orig, 2 * CROP_SIZE, random_crop=False)
+            sx = img_init.shape[1] // (2 * CROP_SIZE)
+            sy = img_init.shape[0] // (2 * CROP_SIZE)
+            j = 0
+            k = 8
+            img_batch = np.zeros((k * sx * sy, CROP_SIZE, CROP_SIZE, 3), dtype=np.float32)
+            manipulated_batch = np.zeros((k * sx * sy, 1), dtype=np.float32)
+            manipulated = 1.0
+            # m = random.choice(MANIPULATIONS)
+            img = random_manipulation(img_init.copy(), m)
+            img = get_crop(img, CROP_SIZE, random_crop=False)
 
-        timg = cv2.transpose(img)
-        for _img in [img, cv2.flip(img, 0), cv2.flip(img, 1), cv2.flip(img, -1),
-                     timg, cv2.flip(timg, 0), cv2.flip(timg, 1), cv2.flip(timg, -1)]:
-            img_batch[j] = preprocess_image(_img, classifier=args.classifier)
-            manipulated_batch[j] = manipulated
-            fnames.append(idx.split("/")[-1])
-            aug.append(j)
-            j += 1
+            timg = cv2.transpose(img)
+            for _img in [img, cv2.flip(img, 0), cv2.flip(img, 1), cv2.flip(img, -1),
+                         timg, cv2.flip(timg, 0), cv2.flip(timg, 1), cv2.flip(timg, -1)]:
+                img_batch[j] = preprocess_image(_img, classifier=args.classifier)
+                manipulated_batch[j] = manipulated
+                fnames.append(idx.split("/")[-1])
+                aug.append(j)
+                j += 1
 
-        l = img_batch.shape[0]
-        # print('TTA size: {} J size: {}'.format(l, j))
-        batch_size = args.batch_size
-        for i in range(l // batch_size + 1):
-            batch_pred = model.predict_on_batch([img_batch[i * batch_size:min(l, (i + 1) * batch_size)],
-                                                 manipulated_batch[i * batch_size:min(l, (i + 1) * batch_size)]])
-            if i == 0:
-                prediction = batch_pred
+            l = img_batch.shape[0]
+            # print('TTA size: {} J size: {}'.format(l, j))
+            batch_size = args.batch_size
+            for i in range(l // batch_size + 1):
+                batch_pred = model.predict_on_batch([img_batch[i * batch_size:min(l, (i + 1) * batch_size)],
+                                                     manipulated_batch[i * batch_size:min(l, (i + 1) * batch_size)]])
+                if i == 0:
+                    prediction = batch_pred
+                else:
+                    prediction = np.concatenate((prediction, batch_pred), axis=0)
+
+            probs = np.vstack((probs, prediction))
+            pred_with_manip = np.mean(prediction, axis=0)
+
+            prediction_class_idx = np.argmax(pred_with_manip)
+            class_idx = get_class(os.path.basename(os.path.dirname(idx)))
+            real_class.append(class_idx)
+            if class_idx == prediction_class_idx:
+                correct_predictions_with_manip += 1
+                correct_str = 'yes'
+                manipulation_stat[m][0] += 1
             else:
-                prediction = np.concatenate((prediction, batch_pred), axis=0)
+                correct_str = 'no'
+                manipulation_stat[m][1] += 1
 
-        probs = np.vstack((probs, prediction))
-        pred_with_manip = np.mean(prediction, axis=0)
-
-        prediction_class_idx = np.argmax(pred_with_manip)
-        class_idx = get_class(os.path.basename(os.path.dirname(idx)))
-        real_class.append(class_idx)
-        if class_idx == prediction_class_idx:
-            correct_predictions_with_manip += 1
-            correct_str = 'yes'
-            manipulation_stat[m][0] += 1
-        else:
-            correct_str = 'no'
-            manipulation_stat[m][1] += 1
-
-        print('Prediction with manip {}: {} Prob: {:.4f}'.format(m, np.argmax(pred_with_manip), pred_with_manip[np.argmax(pred_with_manip)]))
-        print('Prediction real: {} [Correct: {}]'.format(class_idx, correct_str))
+            print('Prediction with manip {}: {} Prob: {:.4f}'.format(m, np.argmax(pred_with_manip), pred_with_manip[np.argmax(pred_with_manip)]))
+            print('Prediction real: {} [Correct: {}]'.format(class_idx, correct_str))
 
     ans = pd.DataFrame()
     ans["name"] = fnames
@@ -233,7 +234,7 @@ def run_validation_single():
         print('{}: {}'.format(m, manipulation_stat[m]))
 
     correct_predictions_no_manip /= len(ids)
-    correct_predictions_with_manip /= len(ids)
+    correct_predictions_with_manip /= len(MANIPULATIONS) * len(ids)
     print("Accuracy no manipulation: {:.6f}".format(correct_predictions_no_manip))
     print("Accuracy with manipulation: {:.6f}".format(correct_predictions_with_manip))
     print("Accuracy overall: {:.6f}".format((0.7 * correct_predictions_no_manip + 0.3 * correct_predictions_with_manip)))
@@ -259,9 +260,20 @@ def check_subm_distribution(subm_path):
         print('{}: {}'.format(c, checker[c]))
 
 
-def proc_tst_and_create_subm():
-    from conditional import conditional
+def check_subm_diff(s1p, s2p):
+    df1 = pd.read_csv(s1p)
+    df2 = pd.read_csv(s2p)
+    df1.sort_values('fname', inplace=True)
+    df1.reset_index(drop=True, inplace=True)
+    df2.sort_values('fname', inplace=True)
+    df2.reset_index(drop=True, inplace=True)
+    dff = len(df1[df1['camera'] != df2['camera']])
+    total = len(df1)
+    perc = 100 * dff / total
+    print('Difference in {} pos from {}. Percent: {:.2f}%'.format(dff, total, perc))
 
+
+def proc_tst_and_create_subm():
     print("Loading model " + args.model)
     model = load_model(args.model, compile=False)
     # e.g. ResNet50_do0.3_doc0.0_avg-fold_1-epoch053-val_acc0.911957.hdf5
@@ -336,21 +348,79 @@ def proc_tst_and_create_subm():
 
     csvfile.close()
     check_subm_distribution(submission_file)
+    check_subm_diff(SUBM_PATH + 'equal_all_fix_0.983.csv', submission_file)
 
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch033-val_acc0.943614.hdf5'
+    args.model = MODELS_PATH + 'DenseNet121_do0.3_doc0.0_avg-fold_1-epoch060-val_acc0.978571.hdf5'
 
-    if 0:
+    if 1:
         # Validation
         args.test_train = True
         args.test = None
         run_validation_single()
 
-    # Test
-    args.test_train = None
-    args.test = True
-    proc_tst_and_create_subm()
+    if 1:
+        # Test
+        args.test_train = None
+        args.test = True
+        proc_tst_and_create_subm()
 
     print('Time: {:.0f} sec'.format(time.time() - start_time))
+
+'''
+DenseNet121_do0.3_doc0.0_avg-fold_1-epoch041-val_acc0.960884.hdf5
+
+Manipulation stat
+jpg70: [84, 1]
+jpg90: [101, 0]
+gamma0.8: [79, 1]
+gamma1.2: [109, 1]
+bicubic0.5: [93, 12]
+bicubic0.8: [76, 2]
+bicubic1.5: [95, 1]
+bicubic2.0: [93, 2]
+Accuracy no manipulation: 0.993333
+Accuracy with manipulation: 0.973333
+Accuracy overall: 0.987333
+
+HTC-1-M7: [138, 134]
+iPhone-6: [133, 134]
+Motorola-Droid-Maxx: [131, 133]
+Motorola-X: [127, 131]
+Samsung-Galaxy-S4: [137, 133]
+iPhone-4s: [138, 132]
+LG-Nexus-5x: [72, 109]
+Motorola-Nexus-6: [170, 155]
+Samsung-Galaxy-Note3: [138, 133]
+Sony-NEX-7: [136, 126]
+Difference in 142 pos from 2640. Percent: 5.38%
+
+DenseNet121_do0.3_doc0.0_avg-fold_1-epoch060-val_acc0.978571.hdf5
+Manipulation stat
+jpg70: [84, 1]
+jpg90: [101, 0]
+gamma0.8: [79, 1]
+gamma1.2: [109, 1]
+bicubic0.5: [98, 7]
+bicubic0.8: [76, 2]
+bicubic1.5: [95, 1]
+bicubic2.0: [94, 1]
+Accuracy no manipulation: 0.993333
+Accuracy with manipulation: 0.981333
+Accuracy overall: 0.989733
+
+HTC-1-M7: [137, 134]
+iPhone-6: [131, 132]
+Motorola-Droid-Maxx: [132, 131]
+Motorola-X: [130, 131]
+Samsung-Galaxy-S4: [134, 132]
+iPhone-4s: [134, 132]
+LG-Nexus-5x: [73, 112]
+Motorola-Nexus-6: [168, 153]
+Samsung-Galaxy-Note3: [144, 135]
+Sony-NEX-7: [137, 128]
+Difference in 132 pos from 2640. Percent: 5.00%
+LB: 0.957
+'''
