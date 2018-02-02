@@ -7,6 +7,8 @@ from io import BytesIO
 from PIL import Image
 import math
 import pyvips
+import scipy.misc
+import skimage.transform
 from keras.utils import to_categorical
 from keras.applications import *
 
@@ -32,7 +34,7 @@ def get_crop(img, crop_size, random_crop=False):
     return img[center_y - half_crop : center_y + crop_size - half_crop, center_x - half_crop : center_x + crop_size - half_crop]
 
 
-def random_manipulation(img, manipulation=None):
+def random_manipulation_v1(img, manipulation=None):
     global MANIPULATIONS
 
     if manipulation is None:
@@ -54,6 +56,45 @@ def random_manipulation(img, manipulation=None):
     elif manipulation.startswith('bicubic'):
         scale = float(manipulation[7:])
         im_decoded = cv2.resize(img, (0, 0), fx=scale, fy=scale, interpolation = cv2.INTER_CUBIC)
+    else:
+        assert False
+    return im_decoded
+
+
+def random_manipulation(img, manipulation=None):
+    global MANIPULATIONS
+
+    if manipulation is None:
+        manipulation = random.choice(MANIPULATIONS)
+
+    if manipulation.startswith('jpg'):
+        quality = int(manipulation[3:]) + random.randint(-1, 1)
+        if random.randint(0, 1) == 0:
+            out = BytesIO()
+            im = Image.fromarray(img)
+            im.save(out, format='jpeg', quality=quality)
+            im_decoded = jpeg.JPEG(np.frombuffer(out.getvalue(), dtype=np.uint8)).decode()
+            del out
+            del im
+        else:
+            _, out = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+            im_decoded = cv2.imdecode(out, 1)
+    elif manipulation.startswith('gamma'):
+        gamma = float(manipulation[5:]) + random.uniform(-0.05, 0.05)
+        im_decoded = np.uint8(cv2.pow(img / 255., gamma)*255.)
+    elif manipulation.startswith('bicubic'):
+        scale = float(manipulation[7:])
+        if scale < 0.6:
+            scale += random.uniform(0.0, 0.05)
+        else:
+            scale += random.uniform(-0.05, 0.05)
+        scale_type = random.randint(0, 2)
+        if scale_type == 0:
+            im_decoded = cv2.resize(img, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        elif scale_type == 1:
+            im_decoded = scipy.misc.imresize(img, scale, interp='bicubic')
+        else:
+            im_decoded = (255. * skimage.transform.rescale(img, scale, order=3, mode='constant')).astype(np.uint8)
     else:
         assert False
     return im_decoded
