@@ -150,9 +150,10 @@ def create_validation_csv():
 if __name__ == '__main__':
     # 1st param - location of your directories like 'flickr1', 'val_images' etc
     # 2nd parameter - location where files will be copied. Warning: you need to have sufficient space
-    prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
+    # prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
     # prepare_external_dataset(INPUT_PATH + 'raw/yaphoto/', INPUT_PATH + 'external/')
     # prepare_external_dataset(INPUT_PATH + 'raw/flickr3/', INPUT_PATH + 'external/')
+    prepare_external_dataset(INPUT_PATH + 'raw/LG_nexus5x_monty/', INPUT_PATH + 'external/')
 
     # will return list of lists [[train1, valid1], [train2, valid2] , ... [trainK, validK]]
     # kf = get_kfold_split(num_folds=4)

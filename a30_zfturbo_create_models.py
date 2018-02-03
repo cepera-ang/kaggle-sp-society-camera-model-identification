@@ -121,6 +121,29 @@ def print_distribution(ids, classes=None):
         print('{:>22}: {:5d} ({:04.1f}%)'.format(class_name, class_count, 100. * class_count / len(classes)))
 
 
+def rescale_ids(ids):
+    counter = dict()
+    for ii in ids:
+        clss = os.path.basename(os.path.dirname(ii))
+        if clss not in counter:
+            counter[clss] = []
+        counter[clss].append(ii)
+    max_val = -1
+    for el in counter:
+        if len(counter[el]) > max_val:
+            max_val = len(counter[el])
+    print('Max images per class: {}'.format(max_val))
+
+    ids_train_rescale = []
+    for el in counter:
+        mx = len(counter[el])
+        for j in range(max_val):
+            index = j % mx
+            ids_train_rescale.append(counter[el][index])
+
+    return ids_train_rescale
+
+
 def create_models(nfolds):
     global model, CROP_SIZE
 
@@ -203,6 +226,8 @@ def create_models(nfolds):
         ids_train = list(ids_train)
         ids_val = list(ids_val)
 
+        ids_train = rescale_ids(ids_train)
+
         random.shuffle(ids_train)
         random.shuffle(ids_val)
 
@@ -215,7 +240,8 @@ def create_models(nfolds):
         classes_train = [get_class(os.path.basename(os.path.dirname(idx))) for idx in ids_train]
         class_weight1 = class_weight.compute_class_weight('balanced', np.unique(classes_train), classes_train)
 
-        opt = Adam(lr=args.learning_rate)
+        # opt = Adam(lr=args.learning_rate)
+        opt = SGD(lr=args.learning_rate, decay=1e-6, momentum=0.9, nesterov=True)
         model.compile(optimizer=opt, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
         metric  = "-val_acc{val_acc:.6f}"
@@ -233,7 +259,7 @@ def create_models(nfolds):
 
         history = model.fit_generator(
                 generator        = gen(ids_train, args.batch_size),
-                steps_per_epoch  = int(math.ceil(len(ids_train)  // args.batch_size)),
+                steps_per_epoch  = int(math.ceil(len(ids_train)  // (5 * args.batch_size))),
                 validation_data  = gen(ids_val, args.batch_size, training=False),
                 validation_steps = int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)),
                 epochs=args.max_epoch,
@@ -242,7 +268,7 @@ def create_models(nfolds):
                 max_queue_size=40,
                 use_multiprocessing=False,
                 workers=1,
-                verbose=2,
+                verbose=1,
                 class_weight=class_weight1)
 
         max_acc = max(history.history[monitor])
@@ -271,11 +297,11 @@ if __name__ == '__main__':
         args.batch_size = 8 * len(args.gpus)
     if 0:
         args.classifier = 'DenseNet121'
-        args.gpus = [0, 1, 2, 3]
+        args.gpus = [0, 1, 2]
         args.learning_rate = 1e-5 * len(args.gpus)
-        args.batch_size = 6 * len(args.gpus)
+        args.batch_size = 7 * len(args.gpus)
 
-    args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch002-val_acc0.250679.hdf5'
+    args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch137-val_acc0.959579.hdf5'
     print('Batch size: {} Learning rate: {}'.format(args.batch_size, args.learning_rate))
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))
