@@ -10,18 +10,7 @@ import pickle
 import gzip
 import numpy as np
 from sklearn.model_selection import KFold
-
-
-INPUT_PATH = '../input/'
-OUTPUT_PATH = 'data/'
-
-
-def save_in_file(arr, file_name):
-    pickle.dump(arr, gzip.open(file_name, 'wb+', compresslevel=3))
-
-
-def load_from_file(file_name):
-    return pickle.load(gzip.open(file_name, 'rb'))
+from a00_common_functions import *
 
 
 def md5_from_file(fname):
@@ -70,9 +59,15 @@ def prepare_external_dataset(raw_path, output_path):
     hash_checker = dict()
     files = glob.glob(raw_path + '**/*.jpg', recursive=True)
     if os.path.isdir(output_path):
-        print('Output folder "{}" already exists! You must delete it before proceed!'.format(output_path))
-        exit()
-    os.mkdir(output_path)
+        print('Output folder "{}" already exists! Create hash array to exclude new copies!'.format(output_path))
+        old_files = glob.glob(output_path + '**/*.jpg', recursive=True)
+        print('Old files found: {}'.format(len(old_files)))
+        for f in old_files:
+            hsh = md5_from_file(f)
+            hash_checker[hsh] = 1
+    else:
+        os.mkdir(output_path)
+
     print('Files found: {}'.format(len(files)))
     for f in files:
         tags = exifread.process_file(open(f, 'rb'))
@@ -134,10 +129,32 @@ def get_kfold_split(num_folds=4, cache_path=None):
     return ret
 
 
+def create_validation_csv():
+    train = glob.glob(INPUT_PATH + 'train/*/*.jpg')
+    valid_files = []
+    for c in CLASSES:
+        class_file_list = []
+        for t in train:
+            dir = os.path.basename(os.path.dirname(t))
+            name = os.path.basename(t)
+            if dir == c:
+                class_file_list.append(t)
+
+        print('{}: {}'.format(c, len(class_file_list)))
+        random.shuffle(class_file_list)
+        valid_files += class_file_list[:75].copy()
+    print(len(valid_files))
+    save_in_file(valid_files, OUTPUT_PATH + 'validation_files.pklz')
+
+
 if __name__ == '__main__':
     # 1st param - location of your directories like 'flickr1', 'val_images' etc
     # 2nd parameter - location where files will be copied. Warning: you need to have sufficient space
-    prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
+    # prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
+    # prepare_external_dataset(INPUT_PATH + 'raw/yaphoto/', INPUT_PATH + 'external/')
+    # prepare_external_dataset(INPUT_PATH + 'raw/flickr3/', INPUT_PATH + 'external/')
+    prepare_external_dataset(INPUT_PATH + 'raw/LG_nexus5x_monty/', INPUT_PATH + 'external/')
 
     # will return list of lists [[train1, valid1], [train2, valid2] , ... [trainK, validK]]
-    kf = get_kfold_split(num_folds=4)
+    # kf = get_kfold_split(num_folds=4)
+    # create_validation_csv()

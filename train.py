@@ -18,7 +18,7 @@ from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
 from keras.models import load_model, Model
 from keras.layers import concatenate, Lambda, Input, Dense, Dropout, Flatten, Conv2D, MaxPooling2D, \
         BatchNormalization, Activation, GlobalAveragePooling2D, Reshape
-from keras  .utils import to_categorical
+from keras.utils import to_categorical
 from keras.applications import *
 from keras import backend as K
 from keras.engine.topology import Layer
@@ -129,8 +129,6 @@ RESOLUTIONS = {
         [3088,4130], [3120,4160]], # Motorola-Nexus-6 flips
     8: [[4128,2322]], # no flips 
     9: [[6000,4000]], # no flips
-    10:[[4160, 2340]],
-    11:[[2340, 4160]],
 }
 
 ORIENTATION_FLIP_ALLOWED = [
@@ -276,12 +274,6 @@ def get_class(class_name):
     assert class_idx in range(N_CLASSES)
     return class_idx
 
-
-def check_quality(filename):
-    process = subprocess.Popen(stdout=subprocess.PIPE, args=['identify', '-format', '\'%Q\'', filename])
-    out = process.stdout.read(100).decode()[1:-1]
-    return int(out)
-
 def process_item(item, training, transforms=[[]]):
 
     class_name = item.split('/')[-2]
@@ -290,18 +282,15 @@ def process_item(item, training, transforms=[[]]):
     validation = not training 
 
     img = load_img_fast_jpg(item)
-    quality = check_quality(item)
-    if quality < 95:
-        return None
 
     shape = list(img.shape[:2])
 
     # # discard images that do not have right resolution
-    if shape not in RESOLUTIONS[class_idx]:
-        return None
+    #if shape not in RESOLUTIONS[class_idx]:
+    #    return None
     # discard only too small images
-    # if np.max(shape) < 2000 or np.min(shape) < 1100:
-    #     return None
+    #if np.max(shape) < 2000 or np.min(shape) < 1100:
+    #    return None
     # some images may not be downloaded correclty and are B/W, discard those
 
     # some images may not be downloaded correctly and are B/W, discard those
@@ -504,6 +493,15 @@ if not (args.test or args.test_train):
     else:
         ids_train = ids
         ids_val   = [ ]
+
+        df = pd.read_csv("common_image_info_additional.csv")
+
+        ids_train = [c.replace('\\',"/") for c in df[(df["valid_soft"]==1)&(df["valid_resolution_and_quality"]==1)]["filename"]]
+
+        for x in ids_train:
+            if not isfile(x):
+                print("Missing:", x)
+
         extra_val_ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
         extra_val_ids.sort()
         ids_val.extend(extra_val_ids)
@@ -520,11 +518,6 @@ if not (args.test or args.test_train):
             ids_train = list(set(ids_train).difference(set(idx_to_transfer)))
 
             ids_val.extend(idx_to_transfer)
-
-        ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER))
-        # ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
-        # ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
-
 
         random.shuffle(ids_train)
         random.shuffle(ids_val)
@@ -575,7 +568,7 @@ else:
     if args.test:
         ids = glob.glob(join(TEST_FOLDER,'*.tif'))
     elif args.test_train:
-        ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
+        ids = glob.glob(join(TRAIN_FOLDER,'*/*.jpg'))
     else:
         assert False
 
@@ -589,6 +582,7 @@ else:
         if args.test:
             csv_writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
             csv_writer.writerow(['fname','camera'])
+            classes = []
         else:
             correct_predictions = 0
         
@@ -599,8 +593,8 @@ else:
         for i, idx in enumerate(tqdm(ids)):
             #fnames.append(idx.split("/")[-1])
             img = np.array(Image.open(idx))
-            if args.test_train or args.classifier == 'MobileNet':
-                img = get_crop(img, CROP_SIZE, random_crop=False)
+            # брать кроп всегда, да и всё, зачем тут выбор?
+            img = get_crop(img, CROP_SIZE, random_crop=False)
 
             manipulated = np.float32([1. if idx.find('manip') != -1 else 0.])
             
@@ -632,8 +626,8 @@ else:
             probs = np.vstack((probs, prediction))
             if prediction.shape[0] != 1: # TTA
                 #prediction = np.mean(prediction, axis=0)
-                prediction = np.max(prediction, axis=0)
-                #prediction = np.sqrt((np.mean(prediction**2, axis=0))
+                #prediction = np.max(prediction, axis=0)
+                prediction = np.sqrt(np.mean(prediction**2, axis=0))
                 #prediction = scipy.stats.mstats.gmean(prediction, axis=0)
             
             #print(prediction)
@@ -658,7 +652,6 @@ else:
         
         if args.test_train:
             print("Accuracy: " + str(correct_predictions / len(ids)))
-            classes.append(prediction_class_idx)
 
         if args.test:
             print("Test set predictions distribution:")

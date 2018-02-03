@@ -2,8 +2,7 @@
 
 if __name__ == '__main__':
     import os
-    gpu_use = 2
-    FOLD_TO_CALC = [1, 2, 3, 4]
+    gpu_use = "0, 2"
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
     os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
@@ -78,9 +77,8 @@ def gen(items, batch_size, training=True):
     # class index
     y = np.empty((batch_size * valid_batch_factor), dtype=np.int64)
 
-    if 1:
-        # p = Pool(cpu_count()-2)
-        p = ThreadPool(cpu_count()-1)
+    p = ThreadPool(cpu_count() - 2)
+    # p = ThreadPool(8)
 
     transforms = VALIDATION_TRANSFORMS if validation else [[]]
 
@@ -89,21 +87,13 @@ def gen(items, batch_size, training=True):
         if training:
             random.shuffle(items)
 
-        if 1:
-            process_item_func = partial(process_item, training=training, transforms=transforms, crop_size=CROP_SIZE, classifier=args.classifier)
+        process_item_func = partial(process_item, training=training, transforms=transforms, crop_size=CROP_SIZE, classifier=args.classifier)
 
         batch_idx = 0
         iter_items = iter(items)
         for item_batch in iter(lambda:list(islice(iter_items, batch_size)), []):
 
-            if 1:
-                batch_results = p.map(process_item_func, item_batch)
-            else:
-                batch_results = []
-                for it in item_batch:
-                    b = process_item(it, training=training, transforms=transforms, crop_size=CROP_SIZE, classifier=args.classifier)
-                    batch_results.append(b)
-
+            batch_results = p.map(process_item_func, item_batch)
             for batch_result in batch_results:
 
                 if batch_result is not None:
@@ -131,6 +121,29 @@ def print_distribution(ids, classes=None):
         print('{:>22}: {:5d} ({:04.1f}%)'.format(class_name, class_count, 100. * class_count / len(classes)))
 
 
+def rescale_ids(ids):
+    counter = dict()
+    for ii in ids:
+        clss = os.path.basename(os.path.dirname(ii))
+        if clss not in counter:
+            counter[clss] = []
+        counter[clss].append(ii)
+    max_val = -1
+    for el in counter:
+        if len(counter[el]) > max_val:
+            max_val = len(counter[el])
+    print('Max images per class: {}'.format(max_val))
+
+    ids_train_rescale = []
+    for el in counter:
+        mx = len(counter[el])
+        for j in range(max_val):
+            index = j % mx
+            ids_train_rescale.append(counter[el][index])
+
+    return ids_train_rescale
+
+
 def create_models(nfolds):
     global model, CROP_SIZE
 
@@ -141,7 +154,7 @@ def create_models(nfolds):
     from keras.models import load_model, Model
     from keras.layers import concatenate, Lambda, Input, Dense, Dropout, Flatten, Conv2D, MaxPooling2D, \
         BatchNormalization, Activation, GlobalAveragePooling2D, Reshape
-    from multi_gpu_keras import multi_gpu_model
+    from a00_multi_gpu_keras import multi_gpu_model
 
     # MAIN
     if args.model:
@@ -198,23 +211,25 @@ def create_models(nfolds):
             last_epoch = int(match.group(2))
 
     model.summary()
-    # model = multi_gpu_model(model, gpus=args.gpus)
+    model = multi_gpu_model(model, gpus=args.gpus)
 
     # TRAINING
     num_fold = 0
-    # kfold_split = get_kfold_split(nfolds)
-    single_split = get_single_split_with_csv_file(fraction=0.9, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
+    # kfold_split = get_kfold_split_with_csv_file(nfolds, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
+    # single_split = get_single_split_with_csv_file(fraction=0.9, csv_file=OUTPUT_PATH + 'common_image_info_additional.csv')
+    single_split = get_single_split_final(OUTPUT_PATH + 'common_image_info_additional.csv', OUTPUT_PATH + 'validation_files.pklz')
     for ids_train, ids_val in [single_split]:
         num_fold += 1
         print('Train files: {}'.format(len(ids_train)))
         print('Valid files: {}'.format(len(ids_val)))
 
-        if 'FOLD_TO_CALC' in globals():
-            if num_fold not in FOLD_TO_CALC:
-                continue
-
         ids_train = list(ids_train)
         ids_val = list(ids_val)
+
+        print("Training set distribution (initial):")
+        print_distribution(ids_train)
+
+        ids_train = rescale_ids(ids_train)
 
         random.shuffle(ids_train)
         random.shuffle(ids_val)
@@ -228,7 +243,8 @@ def create_models(nfolds):
         classes_train = [get_class(os.path.basename(os.path.dirname(idx))) for idx in ids_train]
         class_weight1 = class_weight.compute_class_weight('balanced', np.unique(classes_train), classes_train)
 
-        opt = Adam(lr=args.learning_rate)
+        # opt = Adam(lr=args.learning_rate)
+        opt = SGD(lr=args.learning_rate, decay=1e-6, momentum=0.9, nesterov=True)
         model.compile(optimizer=opt, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
         metric  = "-val_acc{val_acc:.6f}"
@@ -246,7 +262,7 @@ def create_models(nfolds):
 
         history = model.fit_generator(
                 generator        = gen(ids_train, args.batch_size),
-                steps_per_epoch  = int(math.ceil(len(ids_train)  // args.batch_size)),
+                steps_per_epoch  = int(math.ceil(len(ids_train)  // (5 * args.batch_size))),
                 validation_data  = gen(ids_val, args.batch_size, training=False),
                 validation_steps = int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)),
                 epochs=args.max_epoch,
@@ -255,6 +271,7 @@ def create_models(nfolds):
                 max_queue_size=40,
                 use_multiprocessing=False,
                 workers=1,
+                verbose=2,
                 class_weight=class_weight1)
 
         max_acc = max(history.history[monitor])
@@ -271,9 +288,26 @@ def create_models(nfolds):
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.classifier = 'ResNet50'
-    args.learning_rate = 1e-4
-    args.batch_size = 10
-    args.model = MODELS_PATH + 'ResNet50_do0.3_doc0.0_avg-fold_1-epoch007-val_acc0.785386.hdf5'
+    if 0:
+        args.classifier = 'ResNet50'
+        args.gpus = [0, 1, 2, 3]
+        args.learning_rate = 1e-5 * len(args.gpus)
+        args.batch_size = 6 * len(args.gpus)
+    if 1:
+        args.classifier = 'VGG16'
+        args.gpus = [0, 1]
+        args.learning_rate = 1e-4 * len(args.gpus)
+        args.batch_size = 8 * len(args.gpus)
+    if 0:
+        args.classifier = 'DenseNet121'
+        args.gpus = [0, 1, 2]
+        args.learning_rate = 1e-5 * len(args.gpus)
+        args.batch_size = 7 * len(args.gpus)
+
+    args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch142-val_acc0.931046.hdf5'
+    print('Batch size: {} Learning rate: {}'.format(args.batch_size, args.learning_rate))
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))
+
+# ResNet50 (Single split + CSV)
+# VGG16 (KFold split + CSV)

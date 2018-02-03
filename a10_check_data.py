@@ -187,7 +187,11 @@ def prepare_common_info_csv_for_files(train_path, external_path, output_csv):
             soft = str(tags['Image Software'])
         except:
             soft = ''
-        i = Image(f)
+        try:
+            i = Image(f)
+        except:
+            print('Image magic reading error. Skip!')
+            continue
         quality, width, height = i.quality(), i.size().width(), i.size().height()
         line = [f, dir, is_external, model, soft, quality, width, height]
         info_arr.append(line)
@@ -307,14 +311,15 @@ if __name__ == '__main__':
     # find_duplicates(INPUT_PATH + 'external/')
     # find_duplicates(INPUT_PATH)
     # get_train_exif_dict(INPUT_PATH + 'train/')
-    # get_external_exif_dict(INPUT_PATH + 'raw/')
+    # get_external_exif_dict(INPUT_PATH + 'raw/flickr3/')
 
     # 1st param - location of your directories like 'flickr1', 'val_images' etc
     # 2nd parameter - location where files will be copied. Warning: you need to have sufficient space
     # prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
-    prepare_common_info_csv_for_files(INPUT_PATH + 'train/', INPUT_PATH + 'external/', OUTPUT_PATH + 'common_image_info.csv')
-    get_valid_fields_from_csv(OUTPUT_PATH + 'common_image_info.csv', OUTPUT_PATH + 'common_image_info_additional.csv')
-    show_csv_fields_stats(OUTPUT_PATH + 'common_image_info_additional.csv')
+    if 1:
+        prepare_common_info_csv_for_files(INPUT_PATH + 'train/', INPUT_PATH + 'external/', OUTPUT_PATH + 'common_image_info.csv')
+        get_valid_fields_from_csv(OUTPUT_PATH + 'common_image_info.csv', OUTPUT_PATH + 'common_image_info_additional.csv')
+        show_csv_fields_stats(OUTPUT_PATH + 'common_image_info_additional.csv')
 
 
 '''
@@ -349,4 +354,24 @@ Folder nexus_6: Available models: {'Nexus 6': 1228}
 Folder samsung_note3: Available models: {'': 2, 'SM-N900P': 18, 'SM-N9005': 1450}
 Folder samsung_s4: Available models: {'': 2, 'GT-I9505': 1296, 'SPH-L720': 44}
 Folder sony_nex7: Available models: {'': 2, 'NEX-7': 1345}
+
+yaphoto
+Folder HTC-1-M7: Available models: {'': 41, 'HTC One X9 dual sim': 45, 'HTC One X': 401, 'HTC One SV': 6, 'HTC One_M8 dual sim': 32, 'HTC_One_mini_2': 1, 'HTC One mini 2': 28, 'HTC One S': 134, 'HTC One A9': 19, 'HTC One M8s': 6, 'HTC One XL': 14, 'One X': 9, 'HTC One dual sim': 66, 'HTCONE': 390, 'One S': 10, 'HTC One 801e': 4, 'HTC One_E8': 1, 'HTC One ME dual sim': 1, 'HTC One E9PLUS dual sim': 22, 'HTC One_M8': 171, 'HTC One V': 72, 'HTC One M9_Prime Camera Edition': 1, 'HTC One M9PLUS': 15, 'HTC One mini': 158, 'HTC One M9': 152, 'HTC One X+': 27, 'HTC One': 205, 'HTC6500LVW': 17, 'HTC One A9s': 1, 'One': 1, 'HTC One_E8 dual sim': 14}
+Folder Motorola-Droid-Maxx: Available models: {'': 168, 'xt1080': 4, 'XT1080': 756}
+Folder Motorola-Nexus-6: Available models: {'': 4, 'Nexus 6P': 502, 'Nexus 6': 1662}
+Folder Samsung-Galaxy-Note3: Available models: {'SM-N9005': 1581, '': 15, 'SM-N900P': 64}
+Folder Samsung-Galaxy-S4: Available models: {'': 44, 'SPH-L720T': 2, 'SPH-L720': 816, 'GT-I9505': 1651}
+Folder Sony-NEX-7: Available models: {'': 91, '"NEX-7"': 1, 'NEX-7': 1959}
+Folder iPhone-4s: Available models: {'': 117, 'iPhone 4S': 1930}
+Folder iPhone-6: Available models: {'': 20, 'iPhone 6s': 180, 'iPhone 6 Plus': 17, 'iPhone 6': 820, 'iPhone 6s Plus': 8}
+
+flickr3
+Folder HTC-1-M7: Available models: {'One': 54, 'HTC One': 9451}
+Folder Motorola-Droid-Maxx: Available models: {'XT1060': 9439}
+Folder Motorola-Nexus-6: Available models: {'': 2, 'Nexus 6': 6896}
+Folder Samsung-Galaxy-Note3: Available models: {'SM-N9005': 6613}
+Folder Samsung-Galaxy-S4: Available models: {'': 2, 'GT-I9505': 7703}
+Folder Sony-NEX-7: Available models: {'': 7, 'NEX-7': 5314}
+Folder iPhone-4s: Available models: {'': 1, 'iPhone 4S': 9666}
+Folder iPhone-6: Available models: {'': 7, 'Iphone 6': 1, 'iPhone 6': 9540}
 '''

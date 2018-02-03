@@ -121,6 +121,41 @@ def get_kfold_split(num_folds=4, cache_path=None):
     return ret
 
 
+def get_kfold_split_with_csv_file(num_folds=4, csv_file='', cache_path=None):
+    if cache_path is None:
+        cache_path = OUTPUT_PATH + 'kfold_split_{}_{}.pklz'.format(num_folds, os.path.basename(csv_file)[:-4])
+
+    if not os.path.isfile(cache_path):
+        df = pd.read_csv(csv_file)
+        files = []
+        for index, row in df.iterrows():
+            if (row['valid_soft'] == 1) & (row['valid_resolution_and_quality'] == 1) & (row['valid_soft'] == 1):
+                files.append(row['filename'])
+        print('Total files for training: {}'.format(len(files)))
+
+        kf = KFold(n_splits=num_folds, shuffle=True, random_state=66)
+        files = np.array(files)
+        ret = []
+        for train_index, test_index in kf.split(range(len(files))):
+            train_files = files[train_index]
+            test_files = files[test_index]
+            ret.append((train_files, test_files))
+        save_in_file(ret, cache_path)
+    else:
+        ret = load_from_file(cache_path)
+
+    # check all files exists
+    if 1:
+        files = list(ret[0][0]) + list(ret[0][1])
+        print('Files in KFold split: {}'.format(len(files)))
+        for f in files:
+            if not os.path.isfile(f):
+                print('File {} is absent!'.format(f))
+                exit()
+
+    return ret
+
+
 def get_single_split(fraction=0.9, only_train=False, cache_path=None):
     if cache_path is None:
         cache_path = OUTPUT_PATH + 'single_split_{}_{}.pklz'.format(fraction, only_train)
@@ -175,6 +210,26 @@ def get_single_split_with_csv_file(fraction=0.9, csv_file='', cache_path=None):
                 exit()
 
     return train, valid
+
+
+def get_single_split_final(all_correct_files, validation_files):
+    cor = pd.read_csv(all_correct_files)
+    val = set(load_from_file(validation_files))
+
+    files = []
+    excluded_files = 0
+    for index, row in cor.iterrows():
+        if (row['valid_soft'] == 1) & (row['valid_resolution_and_quality'] == 1) & (row['valid_soft'] == 1):
+            if row['filename'] not in val:
+                files.append(row['filename'])
+            else:
+                excluded_files += 1
+    print('Total files for training: {}'.format(len(files)))
+    print('Excluded due to validation: {}'.format(excluded_files))
+    if excluded_files != 750:
+        print('Some problem here!')
+        exit()
+    return files, val
 
 
 def save_in_file(arr, file_name):

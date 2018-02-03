@@ -10,6 +10,8 @@ import exifread
 import skimage.io
 import imageio
 import pyvips
+from io import BytesIO
+import math
 
 
 def get_image_size(fname):
@@ -298,6 +300,88 @@ def improve_subm_v1(subm_path, out_path):
     for c in CLASSES:
         checker[c] = [0, 0]
 
+    manip = []
+    for index, row in df.iterrows():
+        if '_manip' in row['fname']:
+            checker[row['camera']][0] += 1
+            manip.append(1)
+        else:
+            checker[row['camera']][1] += 1
+            manip.append(0)
+    df['manip'] = manip
+
+    manip_counts = []
+    raw_counts = []
+    for c in CLASSES:
+        print('{}: {}'.format(c, checker[c]))
+        manip_counts.append((checker[c][0], c))
+        raw_counts.append((checker[c][1], c))
+
+    manip_counts.sort(key=lambda tup: tup[0], reverse=True)
+    raw_counts.sort(key=lambda tup: tup[0], reverse=True)
+    print(manip_counts)
+    print(raw_counts)
+
+    total_iters = 0
+    while 1:
+        total_iters += 1
+
+        checker = dict()
+        for c in CLASSES:
+            checker[c] = [0, 0]
+
+        manip = []
+        for index, row in df.iterrows():
+            if '_manip' in row['fname']:
+                checker[row['camera']][0] += 1
+                manip.append(1)
+            else:
+                checker[row['camera']][1] += 1
+                manip.append(0)
+        df['manip'] = manip
+
+        manip_counts = []
+        raw_counts = []
+        exit_flag = 1
+        for c in CLASSES:
+            print('{}: {}'.format(c, checker[c]))
+            manip_counts.append((checker[c][0], c))
+            raw_counts.append((checker[c][1], c))
+            if checker[c][0] != 132 or checker[c][1] != 132:
+                exit_flag = 0
+
+        if exit_flag == 1 or total_iters > 100:
+            break
+
+        manip_counts.sort(key=lambda tup: tup[0], reverse=True)
+        raw_counts.sort(key=lambda tup: tup[0], reverse=True)
+
+        # only manip data
+        manip = df[df['manip'] == 1]
+        for count, c in manip_counts:
+            class_part = manip[manip['camera'] == c].copy()
+            class_part = class_part.sort_values(c, ascending=False)
+            for i in range(132, len(class_part)):
+                df.loc[class_part.index.values[i], c] = 0.0
+            break
+
+        # only raw data
+        manip = df[df['manip'] == 0]
+        for count, c in manip_counts:
+            class_part = manip[manip['camera'] == c].copy()
+            class_part = class_part.sort_values(c, ascending=False)
+            for i in range(132, len(class_part)):
+                df.loc[class_part.index.values[i], c] = 0.0
+            break
+
+        answ = np.argmax(df[CLASSES].values, axis=1)
+        camera = np.array(CLASSES)[answ]
+        df['camera'] = camera
+
+    checker = dict()
+    for c in CLASSES:
+        checker[c] = [0, 0]
+
     for index, row in df.iterrows():
         if '_manip' in row['fname']:
             checker[row['camera']][0] += 1
@@ -307,7 +391,189 @@ def improve_subm_v1(subm_path, out_path):
     for c in CLASSES:
         print('{}: {}'.format(c, checker[c]))
 
-    # df[['fname', 'camera']].to_csv(out_path, index=False)
+    df[['fname', 'camera']].to_csv(out_path, index=False)
+
+
+def check_subm_distribution(subm_path):
+    df = pd.read_csv(subm_path)
+    checker = dict()
+    for c in CLASSES:
+        checker[c] = [0, 0]
+
+    manip = []
+    for index, row in df.iterrows():
+        if '_manip' in row['fname']:
+            checker[row['camera']][0] += 1
+            manip.append(1)
+        else:
+            checker[row['camera']][1] += 1
+            manip.append(0)
+    df['manip'] = manip
+
+    for c in CLASSES:
+        print('{}: {}'.format(c, checker[c]))
+
+
+def check_subm_diff(s1p, s2p):
+    df1 = pd.read_csv(s1p)
+    df2 = pd.read_csv(s2p)
+    df1.sort_values('fname', inplace=True)
+    df1.reset_index(drop=True, inplace=True)
+    df2.sort_values('fname', inplace=True)
+    df2.reset_index(drop=True, inplace=True)
+    dff = len(df1[df1['camera'] != df2['camera']])
+    total = len(df1)
+    perc = 100 * dff / total
+    print('Difference in {} pos from {}. Percent: {:.2f}%'.format(dff, total, perc))
+
+
+def check_image_manipulation():
+    import imageio
+    import PythonMagick
+
+    test = glob.glob(INPUT_PATH + 'test/*_unalt.tif')
+    img = pyvips.Image.new_from_file(test[0], access='sequential')
+    img = np.ndarray(buffer=img.write_to_memory(),
+                     dtype=np.uint8,
+                     shape=[img.height, img.width, img.bands])
+
+    quality = 70
+    out = BytesIO()
+    im = Image.fromarray(img)
+    im.save(out, format='jpeg', quality=quality)
+    jpeg70_1 = jpeg.JPEG(np.frombuffer(out.getvalue(), dtype=np.uint8)).decode()
+
+    _, out = cv2.imencode('.jpg', img.copy(), [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+    jpeg70_2 = cv2.imdecode(out, 1)
+    print(jpeg70_2.shape)
+
+    # Same as PIL
+    if 0:
+        out = BytesIO()
+        imageio.imwrite(out, img, format='jpeg', quality=quality)
+        jpeg70_3 = jpeg.JPEG(np.frombuffer(out.getvalue(), dtype=np.uint8)).decode()
+
+    if 0:
+        out = BytesIO()
+        i = PythonMagick.Image(test[0])
+        i.quality(quality)
+        i.write(out)
+        jpeg70_3 = jpeg.JPEG(np.frombuffer(out.getvalue(), dtype=np.uint8)).decode()
+
+    out = BytesIO()
+    im = Image.fromarray(img)
+    im.save(out, format='png')
+    i = pyvips.Image.new_from_buffer(out, "")
+    i = i.quality(70)
+    jpeg70_3 = np.ndarray(buffer=i.write_to_memory(),
+                     dtype=np.uint8,
+                     shape=[i.height, i.width, i.bands])
+
+    show_image(img)
+    show_image(jpeg70_1)
+    show_image(jpeg70_2)
+    show_image(jpeg70_3)
+    diff = (np.abs(img.astype(np.int32) - jpeg70_1.astype(np.int32))).sum()
+    print('Pixel diff 1: {} avg: {}'.format(diff, diff/(img.shape[0]*img.shape[1]*img.shape[2])))
+    diff = (np.abs(img.astype(np.int32) - jpeg70_2.astype(np.int32))).sum()
+    print('Pixel diff 2: {} avg: {}'.format(diff, diff / (img.shape[0] * img.shape[1] * img.shape[2])))
+    diff = (np.abs(img.astype(np.int32) - jpeg70_3.astype(np.int32))).sum()
+    print('Pixel diff 2: {} avg: {}'.format(diff, diff / (img.shape[0] * img.shape[1] * img.shape[2])))
+
+
+def check_subm_diff_simple(s1p, s2p):
+    df1 = pd.read_csv(s1p)
+    df2 = pd.read_csv(s2p)
+    df1.sort_values('fname', inplace=True)
+    df1.reset_index(drop=True, inplace=True)
+    df2.sort_values('fname', inplace=True)
+    df2.reset_index(drop=True, inplace=True)
+    dff = len(df1[df1['camera'] != df2['camera']])
+    total = len(df1)
+    perc = 100 * dff / total
+    return dff, perc
+
+
+def check_subm_diff_table():
+    best = SUBM_PATH + 'equal_all_fix_0.983.csv'
+    subms = glob.glob(SUBM_PATH + 'subm_with_score/*.csv')
+    for s in subms:
+        dff, perc = check_subm_diff_simple(best, s)
+        print("Score on LB {} Diff with best {} ({:.2f} %)".format(os.path.basename(s).split('_')[0], dff, perc))
+
+
+def check_gamma_change():
+    test = glob.glob(INPUT_PATH + 'test/*_unalt.tif')
+    img = pyvips.Image.new_from_file(test[0], access='sequential')
+    img = np.ndarray(buffer=img.write_to_memory(),
+                     dtype=np.uint8,
+                     shape=[img.height, img.width, img.bands])
+
+    gamma = 1.2
+    img1 = skimage.exposure.adjust_gamma(img, gamma)
+    img2 = np.uint8(cv2.pow(img / 255., gamma) * 255.)
+    show_image(img)
+    show_image(img1)
+    show_image(img2)
+    diff = (np.abs(img1.astype(np.int32) - img2.astype(np.int32))).sum()
+    print('Pixel diff 1: {} avg: {}'.format(diff, diff / (img.shape[0] * img.shape[1] * img.shape[2])))
+
+
+def get_crop(img, crop_size, random_crop=False):
+    center_x, center_y = img.shape[1] // 2, img.shape[0] // 2
+    half_crop = crop_size // 2
+    pad_x = max(0, crop_size - img.shape[1])
+    pad_y = max(0, crop_size - img.shape[0])
+    if (pad_x > 0) or (pad_y > 0):
+        img = np.pad(img, ((pad_y//2, pad_y - pad_y//2), (pad_x//2, pad_x - pad_x//2), (0,0)), mode='wrap')
+        center_x, center_y = img.shape[1] // 2, img.shape[0] // 2
+    if random_crop:
+        freedom_x, freedom_y = img.shape[1] - crop_size, img.shape[0] - crop_size
+        if freedom_x > 0:
+            center_x += np.random.randint(math.ceil(-freedom_x/2), freedom_x - math.floor(freedom_x/2) )
+        if freedom_y > 0:
+            center_y += np.random.randint(math.ceil(-freedom_y/2), freedom_y - math.floor(freedom_y/2) )
+
+    return img[center_y - half_crop : center_y + crop_size - half_crop, center_x - half_crop : center_x + crop_size - half_crop]
+
+
+def check_bicubic_change():
+    import scipy.misc
+    import skimage.transform
+
+    train = glob.glob(INPUT_PATH + 'train/*/*.jpg')
+    img = pyvips.Image.new_from_file(train[0], access='sequential')
+    img = np.ndarray(buffer=img.write_to_memory(),
+                     dtype=np.uint8,
+                     shape=[img.height, img.width, img.bands])
+
+    bicubic = 2.0
+    img = get_crop(img, 512 * 2, random_crop=False)
+    img0 = get_crop(img, 512, random_crop=False)
+
+    img1 = cv2.resize(img, (0, 0), fx=bicubic, fy=bicubic, interpolation=cv2.INTER_CUBIC)
+    img1 = get_crop(img1, 512, random_crop=False)
+
+    img2 = scipy.misc.imresize(img, bicubic, interp='bicubic')
+    img2 = get_crop(img2, 512, random_crop=False)
+
+    img3 = (255. * skimage.transform.rescale(img, bicubic, order=3, mode='constant')).astype(np.uint8)
+    img3 = get_crop(img3, 512, random_crop=False)
+    print(img3.shape, img3.dtype, img3.min(), img3.max())
+
+    show_image(img1)
+    show_image(img2)
+    show_image(img3)
+    diff = (np.abs(img0.astype(np.int32) - img1.astype(np.int32))).sum()
+    print('Pixel diff 1: {} avg: {}'.format(diff, diff / (img.shape[0] * img.shape[1] * img.shape[2])))
+    diff = (np.abs(img0.astype(np.int32) - img2.astype(np.int32))).sum()
+    print('Pixel diff 1: {} avg: {}'.format(diff, diff / (img.shape[0] * img.shape[1] * img.shape[2])))
+    diff = (np.abs(img1.astype(np.int32) - img2.astype(np.int32))).sum()
+    print('Pixel diff 1: {} avg: {}'.format(diff, diff / (img.shape[0] * img.shape[1] * img.shape[2])))
+    diff = (np.abs(img1.astype(np.int32) - img3.astype(np.int32))).sum()
+    print('Pixel diff 1: {} avg: {}'.format(diff, diff / (img.shape[0] * img.shape[1] * img.shape[2])))
+    diff = (np.abs(img2.astype(np.int32) - img3.astype(np.int32))).sum()
+    print('Pixel diff 1: {} avg: {}'.format(diff, diff / (img.shape[0] * img.shape[1] * img.shape[2])))
 
 
 if __name__ == '__main__':
@@ -322,8 +588,14 @@ if __name__ == '__main__':
     # t, v = get_single_split(fraction=0.9, only_train=True)
     # tst_different_jpeg_readers()
     # check_reading_speed()
-    improve_subm_v1(SUBM_PATH + '3_sq_mean_raw.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
-
+    # improve_subm_v1(SUBM_PATH + '3_sq_mean_raw.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
+    check_subm_distribution(SUBM_PATH + 'submission_resnet50_antorsaegen_119_val_0.9815068493150685_tta_arithmetic.csv')
+    check_subm_diff(SUBM_PATH + '0.985_equal_2_power_mean_hun.csv', SUBM_PATH + 'submission_resnet50_antorsaegen_119_val_0.9815068493150685_tta_arithmetic.csv')
+    # get_single_split_final(OUTPUT_PATH + 'common_image_info_additional.csv', OUTPUT_PATH + 'validation_files.pklz')
+    # check_image_manipulation()
+    # check_subm_diff_table()
+    # check_gamma_change()
+    # check_bicubic_change()
 
 '''
 Time to read 300 for libjpeg-turbo: 9.62 sec
@@ -343,4 +615,17 @@ Time to read 300 for PIL-simd: 25.81 sec
 Time to read 300 for skimage.io Plugin: freeimage: 27.80 sec
 Time to read 300 for Imageio (no rotate): 24.55 sec
 Time to read 300 for PyVips: 12.61 sec
+
+0.978 subm distribution
+HTC-1-M7: [133, 131]
+iPhone-6: [132, 132]
+Motorola-Droid-Maxx: [131, 133]
+Motorola-X: [133, 131]
+Samsung-Galaxy-S4: [133, 131]
+iPhone-4s: [132, 132]
+LG-Nexus-5x: [126, 138]
+Motorola-Nexus-6: [130, 134]
+Samsung-Galaxy-Note3: [135, 129]
+Sony-NEX-7: [135, 129]
+
 '''
