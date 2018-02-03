@@ -47,7 +47,6 @@ if __name__ == '__main__':
               'Motorola-Nexus-6', 'Samsung-Galaxy-Note3', 'Samsung-Galaxy-S4', 'Sony-NEX-7']:
             get_photos(OUTPUT_PATH + 'additional_images/yaphoto/{}.txt'.format(l), INPUT_PATH + 'raw/yaphoto/{}/'.format(l), prefix=l)
 
-    for l in ['iPhone-4s', 'iPhone-6', 'Motorola-Droid-Maxx',
-              'Motorola-Nexus-6', 'Samsung-Galaxy-Note3', 'Samsung-Galaxy-S4', 'Sony-NEX-7']:
-        get_photos(OUTPUT_PATH + 'additional_images/flickr3/{}/correct_shapes.txt'.format(l), INPUT_PATH + 'raw/flickr3/{}/'.format(l),
-                   prefix=l)
+    # for l in ['HTC-1-M7', 'iPhone-4s', 'iPhone-6', 'Motorola-Droid-Maxx', 'Motorola-Nexus-6', 'Samsung-Galaxy-Note3', 'Samsung-Galaxy-S4', 'Sony-NEX-7']:
+    for l in ['Sony-NEX-7']:
+        get_photos(OUTPUT_PATH + 'additional_images/flickr3/{}/correct_shapes.txt'.format(l), INPUT_PATH + 'raw/flickr3/{}/'.format(l), prefix=l)
