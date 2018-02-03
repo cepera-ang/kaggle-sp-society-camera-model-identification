@@ -226,6 +226,9 @@ def create_models(nfolds):
         ids_train = list(ids_train)
         ids_val = list(ids_val)
 
+        print("Training set distribution (initial):")
+        print_distribution(ids_train)
+
         ids_train = rescale_ids(ids_train)
 
         random.shuffle(ids_train)

@@ -243,8 +243,8 @@ def process_item(item, training, transforms=[[]], crop_size=512, classifier='Res
         else:
             img = _img
 
-        # img = get_crop(img, crop_size * 2, random_crop=True if training else False)
-        img = get_crop(img, crop_size * 2, random_crop=False)
+        img = get_crop(img, crop_size * 2, random_crop=True if training else False)
+        # img = get_crop(img, crop_size * 2, random_crop=False)
         # * 2 bc may need to scale by 0.5x and still get a 512px crop
 
         if verbose:
@@ -257,8 +257,8 @@ def process_item(item, training, transforms=[[]], crop_size=512, classifier='Res
             if verbose:
                 print("am: ", img.shape, item)
 
-        # img = get_crop(img, crop_size, random_crop=True if training else False)
-        img = get_crop(img, crop_size, random_crop=False)
+        img = get_crop(img, crop_size, random_crop=True if training else False)
+        # img = get_crop(img, crop_size, random_crop=False)
         if verbose:
             print("ac: ", img.shape, item)
 
