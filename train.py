@@ -27,6 +27,7 @@ import keras
 from multi_gpu_keras import multi_gpu_model
 
 import skimage
+import skimage.transform
 
 from tqdm import tqdm
 from PIL import Image
@@ -48,6 +49,7 @@ from functools import partial
 from itertools import  islice
 from conditional import conditional
 import subprocess
+import scipy
 
 SEED = 42
 
@@ -85,7 +87,7 @@ TRAIN_FOLDER       = '../input/train'
 EXTRA_TRAIN_FOLDER = '../input/external'
 # NEW_TRAIN_FOLDER   = '../input/raw/flickr_new'
 # EXTRA_MOTOX_FOLDER = '../input/raw/moto_x_all'
-EXTRA_VAL_FOLDER   = '../input/raw/val_images'
+EXTRA_VAL_FOLDER   = '../input/val_images'
 TEST_FOLDER        = '../input/test'
 MODEL_FOLDER       = '../output/models'
 SUBMITS_FOLDER     = '../output/submits'
@@ -148,6 +150,8 @@ ALL_RESOLUTIONS = [
     [4160, 2340],
     [2340, 4160],
 ]
+ALL_RESOLUTIONS.extend([resolution[::-1] for resolution in ALL_RESOLUTIONS])
+
 
 ORIENTATION_FLIP_ALLOWED = [
     True,
@@ -166,7 +170,6 @@ for class_id,resolutions in RESOLUTIONS.copy().items():
     resolutions.extend([resolution[::-1] for resolution in resolutions])
     RESOLUTIONS[class_id] = resolutions
 
-ALL_RESOLUTIONS.extend([resolution[::-1] for resolution in ALL_RESOLUTIONS])
 
 MANIPULATIONS = ['jpg70', 'jpg90', 'gamma0.8', 'gamma1.2', 'bicubic0.5', 'bicubic0.8', 'bicubic1.5', 'bicubic2.0']
 
@@ -190,40 +193,54 @@ def check_remove_broken(img_path):
         print('Decoding error:', img_path)
         os.remove(img_path)
 
-def check_load_ids(train_folder):
+def check_load_ids(train_folder, ext= '.jpg'):
     if args.check_train:
-        ids = glob.glob(join(train_folder, '*/*.jpg'))
+        ids = glob.glob(join(train_folder, '*/*' + ext))
         print('Checking files in {} folder'.format(train_folder))
         p = Pool(cpu_count() - 2)
         p.map(check_remove_broken, tqdm(ids))
-    ids = glob.glob(join(train_folder, '*/*.jpg'))
+    ids = glob.glob(join(train_folder, '*/*' + ext))
     return ids
 
 
 def random_manipulation(img, manipulation=None):
+    global MANIPULATIONS
 
-    if manipulation == None:
+    if manipulation is None:
         manipulation = random.choice(MANIPULATIONS)
 
     if manipulation.startswith('jpg'):
-        quality = int(manipulation[3:])
-        out = BytesIO()
-        im = Image.fromarray(img)
-        im.save(out, format='jpeg', quality=quality)
-        im_decoded = jpeg.JPEG(np.frombuffer(out.getvalue(), dtype=np.uint8)).decode()
-        del out
-        del im
+        quality = int(manipulation[3:]) + random.randint(-1, 1)
+        if random.randint(0, 1) == 0:
+            out = BytesIO()
+            im = Image.fromarray(img)
+            im.save(out, format='jpeg', quality=quality)
+            im_decoded = jpeg.JPEG(np.frombuffer(out.getvalue(), dtype=np.uint8)).decode()
+            del out
+            del im
+        else:
+            _, out = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+            im_decoded = cv2.imdecode(out, 1)
     elif manipulation.startswith('gamma'):
-        gamma = float(manipulation[5:])
-        # alternatively use skimage.exposure.adjust_gamma
-        # img = skimage.exposure.adjust_gamma(img, gamma)
+        gamma = float(manipulation[5:]) + random.uniform(-0.05, 0.05)
         im_decoded = np.uint8(cv2.pow(img / 255., gamma)*255.)
     elif manipulation.startswith('bicubic'):
         scale = float(manipulation[7:])
-        im_decoded = cv2.resize(img,(0,0), fx=scale, fy=scale, interpolation = cv2.INTER_CUBIC)
+        if scale < 0.6:
+            scale += random.uniform(0.0, 0.05)
+        else:
+            scale += random.uniform(-0.05, 0.05)
+        scale_type = random.randint(0, 2)
+        if scale_type == 0:
+            im_decoded = cv2.resize(img, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        elif scale_type == 1:
+            im_decoded = scipy.misc.imresize(img, scale, interp='bicubic')
+        else:
+            im_decoded = (255. * skimage.transform.rescale(img, scale, order=3, mode='constant')).astype(np.uint8)
     else:
         assert False
     return im_decoded
+
 
 def preprocess_image(img):
     
@@ -311,10 +328,13 @@ def process_item(item, training, transforms=[[]]):
     w, h, q = get_size_quality(item)
     shape = list((h, w))
 
-    if (q < 95) or (shape not in ALL_RESOLUTIONS):
+    if (shape not in ALL_RESOLUTIONS):
         return None
 
-    img = load_img_fast_jpg(item)
+    if item[-4:] == '.jpg':
+        img = load_img_fast_jpg(item)
+    else:
+        img = load_img(item)
     shape = list(img.shape[:2])
 
     # # discard images that do not have right resolution
@@ -364,13 +384,12 @@ def process_item(item, training, transforms=[[]]):
         if args.verbose:
             print("om: ", img.shape, item)
 
-        manipulated = 0.
+        manipulated = 0. if q > 94 else 1.
         if ((np.random.rand() < 0.5) and training) or force_manipulation:
             img = random_manipulation(img)
             manipulated = 1.
             if args.verbose:
                 print("am: ", img.shape, item)
-
         img = get_crop(img, CROP_SIZE, random_crop=True if training else False)
         if args.verbose:
             print("ac: ", img.shape, item)
@@ -406,7 +425,7 @@ def gen(items, batch_size, training=True):
     # class index
     y = np.empty((batch_size * valid_batch_factor), dtype=np.int64)
 
-    if batch_size > 20:
+    if batch_size > 200:
         p = Pool(20)
     else:
         p = Pool(cpu_count()-2)
@@ -445,245 +464,246 @@ def gen(items, batch_size, training=True):
 
 
 # MAIN
-if args.model:
-    print("Loading model " + args.model)
-    # e.g. DenseNet201_do0.3_doc0.0_avg-epoch128-val_acc0.964744.hdf5
-    match = re.search(r'(([a-zA-Z0-9]+)_[A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.model)
-    model_name = match.group(1)
-    if match.group(2) == 'MobileNet':
-        from keras.utils.generic_utils import CustomObjectScope
+if __name__ == '__main__':
+    if args.model:
+        print("Loading model " + args.model)
+        # e.g. DenseNet201_do0.3_doc0.0_avg-epoch128-val_acc0.964744.hdf5
+        match = re.search(r'(([a-zA-Z0-9]+)_[A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.model)
+        model_name = match.group(1)
+        if match.group(2) == 'MobileNet':
+            from keras.utils.generic_utils import CustomObjectScope
 
-        with CustomObjectScope({'relu6': keras.applications.mobilenet.relu6,
-                                'DepthwiseConv2D': keras.applications.mobilenet.DepthwiseConv2D}):
+            with CustomObjectScope({'relu6': keras.applications.mobilenet.relu6,
+                                    'DepthwiseConv2D': keras.applications.mobilenet.DepthwiseConv2D}):
+                model = load_model(args.model, compile=False)
+
+        else:
             model = load_model(args.model, compile=False)
 
+
+        args.classifier = match.group(2)
+        CROP_SIZE = args.crop_size  = model.get_input_shape_at(0)[0][1]
+        print("Overriding classifier: {} and crop size: {}".format(args.classifier, args.crop_size))
+        last_epoch = int(match.group(3))
     else:
-        model = load_model(args.model, compile=False)
+        last_epoch = 0
 
+        input_image = Input(shape=(CROP_SIZE, CROP_SIZE, 3))
+        manipulated = Input(shape=(1,))
 
-    args.classifier = match.group(2)
-    CROP_SIZE = args.crop_size  = model.get_input_shape_at(0)[0][1]
-    print("Overriding classifier: {} and crop size: {}".format(args.classifier, args.crop_size))
-    last_epoch = int(match.group(3))
-else:
-    last_epoch = 0
+        classifier = globals()[args.classifier]
 
-    input_image = Input(shape=(CROP_SIZE, CROP_SIZE, 3))
-    manipulated = Input(shape=(1,))
+        classifier_model = classifier(
+            include_top=False,
+            weights = 'imagenet' if args.use_imagenet_weights else None,
+            input_shape=(CROP_SIZE, CROP_SIZE, 3),
+            pooling=args.pooling if args.pooling != 'none' else None)
 
-    classifier = globals()[args.classifier]
+        x = input_image
+        if args.learn_kernel_filter:
+            x = Conv2D(3, (7, 7), strides=(1,1), use_bias=False, padding='valid', name='filtering')(x)
+        x = classifier_model(x)
+        x = Reshape((-1,))(x)
+        if args.dropout_classifier != 0.:
+            x = Dropout(args.dropout_classifier, name='dropout_classifier')(x)
+        x = concatenate([x, manipulated])
+        if not args.no_fcs:
+            x = Dense(512, activation='relu', name='fc1')(x)
+            x = Dropout(args.dropout,         name='dropout_fc1')(x)
+            x = Dense(128, activation='relu', name='fc2')(x)
+            x = Dropout(args.dropout,         name='dropout_fc2')(x)
+        prediction = Dense(N_CLASSES, activation ="softmax", name="predictions")(x)
 
-    classifier_model = classifier(
-        include_top=False, 
-        weights = 'imagenet' if args.use_imagenet_weights else None,
-        input_shape=(CROP_SIZE, CROP_SIZE, 3), 
-        pooling=args.pooling if args.pooling != 'none' else None)
+        model = Model(inputs=(input_image, manipulated), outputs=prediction)
+        model_name = args.classifier + \
+            ('_kf' if args.kernel_filter else '') + \
+            ('_lkf' if args.learn_kernel_filter else '') + \
+            '_do' + str(args.dropout) + \
+            '_doc' + str(args.dropout_classifier) + \
+            '_' + args.pooling
 
-    x = input_image
-    if args.learn_kernel_filter:
-        x = Conv2D(3, (7, 7), strides=(1,1), use_bias=False, padding='valid', name='filtering')(x)
-    x = classifier_model(x)
-    x = Reshape((-1,))(x)
-    if args.dropout_classifier != 0.:
-        x = Dropout(args.dropout_classifier, name='dropout_classifier')(x)
-    x = concatenate([x, manipulated])
-    if not args.no_fcs:
-        x = Dense(512, activation='relu', name='fc1')(x)
-        x = Dropout(args.dropout,         name='dropout_fc1')(x)
-        x = Dense(128, activation='relu', name='fc2')(x)
-        x = Dropout(args.dropout,         name='dropout_fc2')(x)
-    prediction = Dense(N_CLASSES, activation ="softmax", name="predictions")(x)
+        if args.weights:
+                model.load_weights(args.weights, by_name=True, skip_mismatch=True)
+                match = re.search(r'([A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.weights)
+                last_epoch = int(match.group(2))
 
-    model = Model(inputs=(input_image, manipulated), outputs=prediction)
-    model_name = args.classifier + \
-        ('_kf' if args.kernel_filter else '') + \
-        ('_lkf' if args.learn_kernel_filter else '') + \
-        '_do' + str(args.dropout) + \
-        '_doc' + str(args.dropout_classifier) + \
-        '_' + args.pooling
+    def print_distribution(ids, classes=None):
+        if classes is None:
+            classes = [get_class(idx.split('/')[-2]) for idx in ids]
+        classes_count = np.bincount(classes)
+        for class_name, class_count in zip(CLASSES, classes_count):
+            print('{:>22}: {:5d} ({:04.1f}%)'.format(class_name, class_count, 100. * class_count / len(classes)))
 
-    if args.weights:
-            model.load_weights(args.weights, by_name=True, skip_mismatch=True)
-            match = re.search(r'([A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.weights)
-            last_epoch = int(match.group(2))
+    model.summary()
+    model = multi_gpu_model(model, gpus=args.gpus)
 
-def print_distribution(ids, classes=None):
-    if classes is None:
-        classes = [get_class(idx.split('/')[-2]) for idx in ids]
-    classes_count = np.bincount(classes)
-    for class_name, class_count in zip(CLASSES, classes_count):
-        print('{:>22}: {:5d} ({:04.1f}%)'.format(class_name, class_count, 100. * class_count / len(classes)))
+    if not (args.test or args.test_train):
 
-model.summary()
-model = multi_gpu_model(model, gpus=args.gpus)
+        # TRAINING
+        ids = glob.glob(join(TRAIN_FOLDER,'*/*.jpg'))
+        ids.sort()
 
-if not (args.test or args.test_train):
-
-    # TRAINING
-    ids = glob.glob(join(TRAIN_FOLDER,'*/*.jpg'))
-    ids.sort()
-
-    if not args.extra_dataset:
-        ids_train, ids_val = train_test_split(ids, test_size=0.1, random_state=SEED)
-    else:
-        ids_train = ids
-        ids_val   = [ ]
-        extra_val_ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
-        extra_val_ids.sort()
-        ids_val.extend(extra_val_ids)
-
-        classes_val = [get_class(idx.split('/')[-2]) for idx in ids_val]
-        classes_val_count = np.bincount(classes_val)
-        max_classes_val_count = max(classes_val_count)
-
-        # Balance validation dataset by filling up classes with less items from training set (and removing those from there)
-        for class_idx in range(N_CLASSES):
-            idx_to_transfer = [idx for idx in ids_train \
-                if get_class(idx.split('/')[-2]) == class_idx][:max_classes_val_count-classes_val_count[class_idx]]
-
-            ids_train = list(set(ids_train).difference(set(idx_to_transfer)))
-
-            ids_val.extend(idx_to_transfer)
-
-        ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER))
-        # ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
-        # ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
-
-
-        random.shuffle(ids_train)
-        random.shuffle(ids_val)
-
-    print("Training set distribution:")
-    print_distribution(ids_train)
-
-    print("Validation set distribution:")
-    print_distribution(ids_val)
-
-    classes_train = [get_class(idx.split('/')[-2]) for idx in ids_train]
-    class_weight = class_weight.compute_class_weight('balanced', np.unique(classes_train), classes_train)
-
-    # opt = Adam(lr=args.learning_rate)
-    opt = SGD(lr=args.learning_rate, decay=1e-5, momentum=0.9, nesterov=True)
-
-    # TODO: implement this correctly.
-    def weighted_loss(weights):
-        def loss(y_true, y_pred):
-            return K.mean(K.square(y_pred - y_true) - K.square(y_true - noise), axis=-1)
-        return loss
-
-    model.compile(optimizer=opt, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-
-    metric  = "-val_acc{val_acc:.6f}"
-    monitor = 'val_acc'
-
-    save_checkpoint = ModelCheckpoint(
-            join(MODEL_FOLDER, model_name+"-epoch{epoch:03d}"+metric+".hdf5"),
-            monitor=monitor,
-            verbose=0,  save_best_only=True, save_weights_only=False, mode='max', period=1)
-
-    reduce_lr = ReduceLROnPlateau(monitor=monitor, factor=0.5, patience=5, min_lr=1e-9, epsilon = 0.00001, verbose=1, mode='max')
-
-    model.fit_generator(
-            generator        = gen(ids_train, args.batch_size),
-            steps_per_epoch  = int(math.ceil(len(ids_train)  // args.batch_size)),
-            validation_data  = gen(ids_val, args.batch_size, training = False),
-            validation_steps = int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)),
-            epochs = args.max_epoch,
-            callbacks = [save_checkpoint, reduce_lr],
-            initial_epoch = last_epoch,
-            max_queue_size = 10,
-            class_weight=class_weight)
-
-else:
-    # TEST
-    if args.test:
-        ids = glob.glob(join(TEST_FOLDER,'*.tif'))
-    elif args.test_train:
-        ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
-    else:
-        assert False
-
-    ids.sort()
-    
-    from conditional import conditional
-    submission_file = 'submission {}.csv'.format(args.model.split(sep='/')[-1])
-    with conditional(args.test, open(join(SUBMITS_FOLDER, submission_file), 'w')) as csvfile:
-        classes = []
-
-        if args.test:
-            csv_writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
-            csv_writer.writerow(['fname','camera'])
+        if not args.extra_dataset:
+            ids_train, ids_val = train_test_split(ids, test_size=0.1, random_state=SEED)
         else:
-            correct_predictions = 0
-        
-        fnames = []
-        labels = []
-        aug = []
-        probs = np.array([]*10).reshape((0,10))
-        for i, idx in enumerate(tqdm(ids)):
-            #fnames.append(idx.split("/")[-1])
-            img = np.array(Image.open(idx))
-            if args.test_train or args.classifier == 'MobileNet':
-                img = get_crop(img, CROP_SIZE, random_crop=False)
+            ids_train = ids
+            ids_val   = [ ]
+            extra_val_ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
+            extra_val_ids.sort()
+            ids_val.extend(extra_val_ids)
 
-            manipulated = np.float32([1. if idx.find('manip') != -1 else 0.])
-            
-            sx = img.shape[1] // CROP_SIZE
-            sy = img.shape[0] // CROP_SIZE
-            j = 0
-            k = 8
-            img_batch = np.zeros((k * sx * sy, CROP_SIZE, CROP_SIZE, 3), dtype=np.float32)
-            manipulated_batch = np.zeros((k * sx * sy, 1),  dtype=np.float32)
-            timg = cv2.transpose(img)
-            for _img in [img, cv2.flip(img, 0), cv2.flip(img, 1), cv2.flip(img, -1),
-                        timg, cv2.flip(timg, 0), cv2.flip(timg, 1), cv2.flip(timg, -1)]:
-                img_batch[j]         = preprocess_image(_img)
-                manipulated_batch[j] = manipulated
-                fnames.append(idx.split("/")[-1])
-                aug.append(j)
-                j+=1            
-            
-            l = img_batch.shape[0]
-            batch_size = args.batch_size
-            for i in range(l//batch_size+1):
-                batch_pred = model.predict_on_batch([img_batch[i*batch_size:min(l,(i+1)*batch_size)], 
-                                                     manipulated_batch[i*batch_size:min(l,(i+1)*batch_size)]])
-                if i==0:
-                    prediction = batch_pred
-                else:
-                    prediction = np.concatenate((prediction, batch_pred),axis=0)                    
-                    
-            probs = np.vstack((probs, prediction))
-            if prediction.shape[0] != 1: # TTA
-                #prediction = np.mean(prediction, axis=0)
-                prediction = np.max(prediction, axis=0)
-                #prediction = np.sqrt((np.mean(prediction**2, axis=0))
-                #prediction = scipy.stats.mstats.gmean(prediction, axis=0)
-            
-            #print(prediction)
-            prediction_class_idx = np.argmax(prediction)
-            #probs = np.vstack((probs, prediction))
-            
-            if args.test_train:
-                class_idx = get_class(idx.split('/')[-2])
-                if class_idx == prediction_class_idx:
-                    correct_predictions += 1
+            classes_val = [get_class(idx.split('/')[-2]) for idx in ids_val]
+            classes_val_count = np.bincount(classes_val)
+            max_classes_val_count = max(classes_val_count)
+
+            # Balance validation dataset by filling up classes with less items from training set (and removing those from there)
+            for class_idx in range(N_CLASSES):
+                idx_to_transfer = [idx for idx in ids_train \
+                    if get_class(idx.split('/')[-2]) == class_idx][:max_classes_val_count-classes_val_count[class_idx]]
+
+                ids_train = list(set(ids_train).difference(set(idx_to_transfer)))
+
+                ids_val.extend(idx_to_transfer)
+
+            ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER, '.jpg'))
+            # ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
+            # ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
+
+
+            random.shuffle(ids_train)
+            random.shuffle(ids_val)
+
+        print("Training set distribution:")
+        print_distribution(ids_train)
+
+        print("Validation set distribution:")
+        print_distribution(ids_val)
+
+        classes_train = [get_class(idx.split('/')[-2]) for idx in ids_train]
+        class_weight = class_weight.compute_class_weight('balanced', np.unique(classes_train), classes_train)
+
+        opt = Adam(lr=args.learning_rate)
+        # opt = SGD(lr=args.learning_rate, decay=1e-5, momentum=0.9, nesterov=True)
+
+        # TODO: implement this correctly.
+        def weighted_loss(weights):
+            def loss(y_true, y_pred):
+                return K.mean(K.square(y_pred - y_true) - K.square(y_true - noise), axis=-1)
+            return loss
+
+        model.compile(optimizer=opt, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+
+        metric  = "-val_acc{val_acc:.6f}"
+        monitor = 'val_acc'
+
+        save_checkpoint = ModelCheckpoint(
+                join(MODEL_FOLDER, model_name+"-epoch{epoch:03d}"+metric+".hdf5"),
+                monitor=monitor,
+                verbose=0,  save_best_only=True, save_weights_only=False, mode='max', period=1)
+
+        reduce_lr = ReduceLROnPlateau(monitor=monitor, factor=0.5, patience=2, min_lr=1e-10, epsilon = 0.00001, verbose=1, mode='max')
+
+        model.fit_generator(
+                generator        = gen(ids_train, args.batch_size),
+                steps_per_epoch  = int(math.ceil(len(ids_train)  // args.batch_size)),
+                validation_data  = gen(ids_val, args.batch_size, training = False),
+                validation_steps = int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)),
+                epochs = args.max_epoch,
+                callbacks = [save_checkpoint, reduce_lr],
+                initial_epoch = last_epoch,
+                max_queue_size = 10,
+                class_weight=class_weight)
+
+    else:
+        # TEST
+        if args.test:
+            ids = glob.glob(join(TEST_FOLDER,'*.tif'))
+        elif args.test_train:
+            ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
+        else:
+            assert False
+
+        ids.sort()
+
+        from conditional import conditional
+        submission_file = 'submission {}.csv'.format(args.model.split(sep='/')[-1])
+        with conditional(args.test, open(join(SUBMITS_FOLDER, submission_file), 'w')) as csvfile:
+            classes = []
 
             if args.test:
-                csv_writer.writerow([idx.split('/')[-1], CLASSES[prediction_class_idx]])
-                classes.append(prediction_class_idx)    
-        
-        ans = pd.DataFrame()
-        ans["name"] = fnames
-        ans["aug"] = aug
-        for i in range(10):
-            ans[CLASSES[i]] = probs[:,i]
-        pd.DataFrame(ans).to_hdf(PROBS_FOLDER + "/tta_8_"+args.model.split("/")[-1],"prob")
-        
-        if args.test_train:
-            print("Accuracy: " + str(correct_predictions / len(ids)))
-            classes.append(prediction_class_idx)
+                csv_writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
+                csv_writer.writerow(['fname','camera'])
+            else:
+                correct_predictions = 0
 
-        if args.test:
-            print("Test set predictions distribution:")
-            print_distribution(None, classes=classes)
+            fnames = []
+            labels = []
+            aug = []
+            probs = np.array([]*10).reshape((0,10))
+            for i, idx in enumerate(tqdm(ids)):
+                #fnames.append(idx.split("/")[-1])
+                img = np.array(Image.open(idx))
+                if args.test_train or args.classifier == 'MobileNet':
+                    img = get_crop(img, CROP_SIZE, random_crop=False)
+
+                manipulated = np.float32([1. if idx.find('manip') != -1 else 0.])
+
+                sx = img.shape[1] // CROP_SIZE
+                sy = img.shape[0] // CROP_SIZE
+                j = 0
+                k = 8
+                img_batch = np.zeros((k * sx * sy, CROP_SIZE, CROP_SIZE, 3), dtype=np.float32)
+                manipulated_batch = np.zeros((k * sx * sy, 1),  dtype=np.float32)
+                timg = cv2.transpose(img)
+                for _img in [img, cv2.flip(img, 0), cv2.flip(img, 1), cv2.flip(img, -1),
+                            timg, cv2.flip(timg, 0), cv2.flip(timg, 1), cv2.flip(timg, -1)]:
+                    img_batch[j]         = preprocess_image(_img)
+                    manipulated_batch[j] = manipulated
+                    fnames.append(idx.split("/")[-1])
+                    aug.append(j)
+                    j+=1
+
+                l = img_batch.shape[0]
+                batch_size = args.batch_size
+                for i in range(l//batch_size+1):
+                    batch_pred = model.predict_on_batch([img_batch[i*batch_size:min(l,(i+1)*batch_size)],
+                                                         manipulated_batch[i*batch_size:min(l,(i+1)*batch_size)]])
+                    if i==0:
+                        prediction = batch_pred
+                    else:
+                        prediction = np.concatenate((prediction, batch_pred),axis=0)
+
+                probs = np.vstack((probs, prediction))
+                if prediction.shape[0] != 1: # TTA
+                    #prediction = np.mean(prediction, axis=0)
+                    prediction = np.max(prediction, axis=0)
+                    #prediction = np.sqrt((np.mean(prediction**2, axis=0))
+                    #prediction = scipy.stats.mstats.gmean(prediction, axis=0)
+
+                #print(prediction)
+                prediction_class_idx = np.argmax(prediction)
+                #probs = np.vstack((probs, prediction))
+
+                if args.test_train:
+                    class_idx = get_class(idx.split('/')[-2])
+                    if class_idx == prediction_class_idx:
+                        correct_predictions += 1
+
+                if args.test:
+                    csv_writer.writerow([idx.split('/')[-1], CLASSES[prediction_class_idx]])
+                    classes.append(prediction_class_idx)
+
+            ans = pd.DataFrame()
+            ans["name"] = fnames
+            ans["aug"] = aug
+            for i in range(10):
+                ans[CLASSES[i]] = probs[:,i]
+            pd.DataFrame(ans).to_hdf(PROBS_FOLDER + "/tta_8_"+args.model.split("/")[-1],"prob")
+
+            if args.test_train:
+                print("Accuracy: " + str(correct_predictions / len(ids)))
+                classes.append(prediction_class_idx)
+
+            if args.test:
+                print("Test set predictions distribution:")
+                print_distribution(None, classes=classes)
