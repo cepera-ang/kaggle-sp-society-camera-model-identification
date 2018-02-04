@@ -64,7 +64,7 @@ parser.add_argument('-w', '--weights', help='load hdf5 weights only (and continu
 parser.add_argument('-do', '--dropout', type=float, default=0.3, help='Dropout rate for FC layers')
 parser.add_argument('-doc', '--dropout-classifier', type=float, default=0., help='Dropout rate for classifier')
 parser.add_argument('-t', '--test', action='store_true', help='Test model and generate CSV submission file')
-parser.add_argument('-tt', '--test-train', action='store_true', help='Test model on the training set')
+parser.add_argument('-tt', '--test-train', action='store_true', help='Test model on the test_test set, also set -t as True')
 parser.add_argument('-cs', '--crop-size', type=int, default=512, help='Crop size')
 parser.add_argument('-g', '--gpus', type=int, default=1, help='Number of GPUs to use')
 parser.add_argument('-p', '--pooling', type=str, default='avg', help='Type of pooling to use: avg|max|none')
@@ -86,7 +86,12 @@ EXTRA_TRAIN_FOLDER = '../input/external'
 # NEW_TRAIN_FOLDER   = '../input/raw/flickr_new'
 # EXTRA_MOTOX_FOLDER = '../input/raw/moto_x_all'
 EXTRA_VAL_FOLDER   = '../input/raw/val_images'
-TEST_FOLDER        = '../input/test'
+if args.test_train:
+    TEST_FOLDER = '../input/test_test'
+    args.test_train = False
+    args.test = True
+else:
+    TEST_FOLDER        = '../input/test'
 MODEL_FOLDER       = '../output/models'
 SUBMITS_FOLDER     = '../output/submits'
 PROBS_FOLDER       = '../output/probs'
@@ -566,7 +571,7 @@ if not (args.test or args.test_train):
 else:
     # TEST
     if args.test:
-        ids = glob.glob(join(TEST_FOLDER,'*.tif'))
+        ids = glob.glob(join(TEST_FOLDER,'*.*'))
     elif args.test_train:
         ids = glob.glob(join(TRAIN_FOLDER,'*/*.jpg'))
     else:
