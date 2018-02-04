@@ -22,6 +22,7 @@ from keras.utils import to_categorical
 from keras.applications import *
 from keras import backend as K
 from keras.engine.topology import Layer
+import keras
 
 from multi_gpu_keras import multi_gpu_model
 
@@ -46,6 +47,7 @@ from multiprocessing import Pool, cpu_count
 from functools import partial
 from itertools import  islice
 from conditional import conditional
+import subprocess
 
 SEED = 42
 
@@ -62,7 +64,7 @@ parser.add_argument('-w', '--weights', help='load hdf5 weights only (and continu
 parser.add_argument('-do', '--dropout', type=float, default=0.3, help='Dropout rate for FC layers')
 parser.add_argument('-doc', '--dropout-classifier', type=float, default=0., help='Dropout rate for classifier')
 parser.add_argument('-t', '--test', action='store_true', help='Test model and generate CSV submission file')
-parser.add_argument('-tt', '--test-train', action='store_true', help='Test model on the training set')
+parser.add_argument('-tt', '--test-train', action='store_true', help='Test model on the test_test set, also set -t as True')
 parser.add_argument('-cs', '--crop-size', type=int, default=512, help='Crop size')
 parser.add_argument('-g', '--gpus', type=int, default=1, help='Number of GPUs to use')
 parser.add_argument('-p', '--pooling', type=str, default='avg', help='Type of pooling to use: avg|max|none')
@@ -80,14 +82,19 @@ parser.add_argument('--check-train', action='store_true', default=False, help='E
 args = parser.parse_args()
 
 TRAIN_FOLDER       = '../input/train'
-EXTRA_TRAIN_FOLDER = '../input/flickr_images'
-NEW_TRAIN_FOLDER   = '../input/flickr_new'
-EXTRA_MOTOX_FOLDER = '../input/moto_x_all'
-EXTRA_VAL_FOLDER   = '../input/val_images'
-TEST_FOLDER        = '../input/test'
-MODEL_FOLDER       = './models'
-SUBMITS_FOLDER     = './submits'
-PROBS_FOLDER       = './probs'
+EXTRA_TRAIN_FOLDER = '../input/external'
+# NEW_TRAIN_FOLDER   = '../input/raw/flickr_new'
+# EXTRA_MOTOX_FOLDER = '../input/raw/moto_x_all'
+EXTRA_VAL_FOLDER   = '../input/raw/val_images'
+if args.test_train:
+    TEST_FOLDER = '../input/test_test'
+    args.test_train = False
+    args.test = True
+else:
+    TEST_FOLDER        = '../input/test'
+MODEL_FOLDER       = '../output/models'
+SUBMITS_FOLDER     = '../output/submits'
+PROBS_FOLDER       = '../output/probs'
 
 CROP_SIZE = args.crop_size
 CLASSES = [
@@ -410,11 +417,20 @@ def gen(items, batch_size, training=True):
 # MAIN
 if args.model:
     print("Loading model " + args.model)
-
-    model = load_model(args.model, compile=False)
     # e.g. DenseNet201_do0.3_doc0.0_avg-epoch128-val_acc0.964744.hdf5
     match = re.search(r'(([a-zA-Z0-9]+)_[A-Za-z_\d\.]+)-epoch(\d+)-.*\.hdf5', args.model)
     model_name = match.group(1)
+    if match.group(2) == 'MobileNet':
+        from keras.utils.generic_utils import CustomObjectScope
+
+        with CustomObjectScope({'relu6': keras.applications.mobilenet.relu6,
+                                'DepthwiseConv2D': keras.applications.mobilenet.DepthwiseConv2D}):
+            model = load_model(args.model, compile=False)
+
+    else:
+        model = load_model(args.model, compile=False)
+
+
     args.classifier = match.group(2)
     CROP_SIZE = args.crop_size  = model.get_input_shape_at(0)[0][1]
     print("Overriding classifier: {} and crop size: {}".format(args.classifier, args.crop_size))
@@ -482,16 +498,7 @@ if not (args.test or args.test_train):
     else:
         ids_train = ids
         ids_val   = [ ]
-        # print(0,len(ids_train))
-        # ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER))
-        # print(1,len(ids_train))
-        # ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
-        # print(2,len(ids_train))
-        # ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
-        # print(3,len(ids_train))
-        # ids_train = [c for c in ids_train if isfile(c)]
-        # print(4,len(ids_train))
-        
+
         df = pd.read_csv("common_image_info_additional.csv")
 
         ids_train = [c.replace('\\',"/") for c in df[(df["valid_soft"]==1)&(df["valid_resolution_and_quality"]==1)]["filename"]]
@@ -499,7 +506,7 @@ if not (args.test or args.test_train):
         for x in ids_train:
             if not isfile(x):
                 print("Missing:", x)
-        
+
         extra_val_ids = glob.glob(join(EXTRA_VAL_FOLDER,'*/*.jpg'))
         extra_val_ids.sort()
         ids_val.extend(extra_val_ids)
@@ -564,7 +571,7 @@ if not (args.test or args.test_train):
 else:
     # TEST
     if args.test:
-        ids = glob.glob(join(TEST_FOLDER,'*.tif'))
+        ids = glob.glob(join(TEST_FOLDER,'*.*'))
     elif args.test_train:
         ids = glob.glob(join(TRAIN_FOLDER,'*/*.jpg'))
     else:
@@ -575,6 +582,7 @@ else:
     from conditional import conditional
     submission_file = 'submission {}.csv'.format(args.model.split(sep='/')[-1])
     with conditional(args.test, open(join(SUBMITS_FOLDER, submission_file), 'w')) as csvfile:
+        classes = []
 
         if args.test:
             csv_writer = csv.writer(csvfile, delimiter=',',quotechar='|', quoting=csv.QUOTE_MINIMAL)
@@ -590,8 +598,8 @@ else:
         for i, idx in enumerate(tqdm(ids)):
             #fnames.append(idx.split("/")[-1])
             img = np.array(Image.open(idx))
-            if args.test_train:
-                img = get_crop(img, CROP_SIZE, random_crop=False)
+            # брать кроп всегда, да и всё, зачем тут выбор?
+            img = get_crop(img, CROP_SIZE, random_crop=False)
 
             manipulated = np.float32([1. if idx.find('manip') != -1 else 0.])
             
@@ -649,7 +657,7 @@ else:
         
         if args.test_train:
             print("Accuracy: " + str(correct_predictions / len(ids)))
-            
+
         if args.test:
             print("Test set predictions distribution:")
             print_distribution(None, classes=classes)
