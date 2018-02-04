@@ -143,6 +143,23 @@ def create_validation_csv():
         print('{}: {}'.format(c, len(class_file_list)))
         random.shuffle(class_file_list)
         valid_files += class_file_list[:75].copy()
+
+    ext = pd.read_csv(OUTPUT_PATH + 'common_image_info_additional.csv')
+    print('Initial length: {}'.format(len(ext)))
+    ext = ext[(ext['is_external'] == 1) & (ext['valid_soft'] == 1) & (ext['valid_resolution_and_quality'] == 1) & (ext['valid_soft'] == 1)]
+    print('Reduced length: {}'.format(len(ext)))
+    for c in CLASSES:
+        class_file_list = []
+        for t in ext['filename'].values:
+            dir = os.path.basename(os.path.dirname(t))
+            name = os.path.basename(t)
+            if dir == c:
+                class_file_list.append(t)
+
+        print('{}: {}'.format(c, len(class_file_list)))
+        random.shuffle(class_file_list)
+        valid_files += class_file_list[:200].copy()
+
     print(len(valid_files))
     save_in_file(valid_files, OUTPUT_PATH + 'validation_files.pklz')
 
@@ -153,8 +170,8 @@ if __name__ == '__main__':
     # prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external/')
     # prepare_external_dataset(INPUT_PATH + 'raw/yaphoto/', INPUT_PATH + 'external/')
     # prepare_external_dataset(INPUT_PATH + 'raw/flickr3/', INPUT_PATH + 'external/')
-    prepare_external_dataset(INPUT_PATH + 'raw/LG_nexus5x_monty/', INPUT_PATH + 'external/')
+    # prepare_external_dataset(INPUT_PATH + 'raw/LG_nexus5x_monty/', INPUT_PATH + 'external/')
 
     # will return list of lists [[train1, valid1], [train2, valid2] , ... [trainK, validK]]
     # kf = get_kfold_split(num_folds=4)
-    # create_validation_csv()
+    create_validation_csv()

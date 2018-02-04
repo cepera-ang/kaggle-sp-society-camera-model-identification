@@ -2,10 +2,10 @@
 
 if __name__ == '__main__':
     import os
-    gpu_use = "0, 2"
+    gpu_use = "0, 1, 2, 3"
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
 
 
 from a01_random_augmentations import *
@@ -243,8 +243,8 @@ def create_models(nfolds):
         classes_train = [get_class(os.path.basename(os.path.dirname(idx))) for idx in ids_train]
         class_weight1 = class_weight.compute_class_weight('balanced', np.unique(classes_train), classes_train)
 
-        # opt = Adam(lr=args.learning_rate)
-        opt = SGD(lr=args.learning_rate, decay=1e-6, momentum=0.9, nesterov=True)
+        opt = Adam(lr=args.learning_rate)
+        # opt = SGD(lr=args.learning_rate, decay=1e-6, momentum=0.9, nesterov=True)
         model.compile(optimizer=opt, loss='sparse_categorical_crossentropy', metrics=['accuracy'])
 
         metric  = "-val_acc{val_acc:.6f}"
@@ -271,8 +271,9 @@ def create_models(nfolds):
                 max_queue_size=40,
                 use_multiprocessing=False,
                 workers=1,
-                verbose=2,
-                class_weight=class_weight1)
+                verbose=1,
+                # class_weight=class_weight1,
+        )
 
         max_acc = max(history.history[monitor])
         print('Maximum acc for fold {}: {} [Ep: {}]'.format(num_fold, max_acc, len(history.history[monitor])))
@@ -303,8 +304,13 @@ if __name__ == '__main__':
         args.gpus = [0, 1, 2]
         args.learning_rate = 1e-5 * len(args.gpus)
         args.batch_size = 7 * len(args.gpus)
+    if 1:
+        args.classifier = 'DenseNet201'
+        args.gpus = [0, 1, 2, 3]
+        args.learning_rate = 1e-5 * len(args.gpus)
+        args.batch_size = 4 * len(args.gpus)
 
-    args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch142-val_acc0.931046.hdf5'
+    # args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch142-val_acc0.931046.hdf5'
     print('Batch size: {} Learning rate: {}'.format(args.batch_size, args.learning_rate))
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))

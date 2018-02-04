@@ -226,7 +226,7 @@ def get_single_split_final(all_correct_files, validation_files):
                 excluded_files += 1
     print('Total files for training: {}'.format(len(files)))
     print('Excluded due to validation: {}'.format(excluded_files))
-    if excluded_files != 750:
+    if excluded_files != 2750:
         print('Some problem here!')
         exit()
     return files, val
