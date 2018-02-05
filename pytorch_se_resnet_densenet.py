@@ -110,3 +110,49 @@ class SE_Resnet50(nn.Module):
         out = out.view(out.size(0), -1)
         out = torch.cat([out, O], 1)
         return F.softmax(self.fc(out), dim=1)
+
+class AvgPool(nn.Module):
+    def forward(self, x):
+        return torch.nn.functional.avg_pool2d(x, (x.size(2), x.size(3)))
+
+
+class DenseNetWithManip(nn.Module):
+    finetune = True
+
+    def __init__(self, num_classes, two_layer=True, densenet=None, freeze=True):
+        super().__init__()
+        self.net = models.densenet201(num_classes=1000)
+        self.net.avgpool = AvgPool()
+        self.relu = torch.nn.ReLU(inplace=True)
+        if densenet is not None:
+            self.load_state_dict(densenet.state_dict(), strict=False)
+
+        if freeze:
+            self.set_trainable(trainable=False)
+
+        if two_layer:
+            mid_channels = 512
+            self.net.classifier = nn.Sequential(
+                nn.Linear(self.net.classifier.in_features + 1, mid_channels),
+                nn.Dropout(p=0.1),
+                nn.Linear(mid_channels, num_classes))
+        else:
+            self.net.classifier = nn.Linear(
+                self.net.classifier.in_features + 1, num_classes)
+
+    def set_trainable(self, trainable):
+        parameters = filter(lambda p: p.requires_grad is not None, self.parameters())
+        for param in parameters:
+            param.requires_grad = trainable
+
+    def forward(self, x, O):  # 0, 1, 2, 3 -> (0, 3, 1, 2)
+        x = torch.transpose(x, 1, 3)  # 0, 3, 2, 1
+        x = torch.transpose(x, 2, 3)  # 0, 3, 1, 2
+        net = self.net
+        features = net.features(x)
+        out = self.relu(features)
+        out = torch.nn.functional.avg_pool2d(out, (out.size(2), out.size(3)))
+        out = out.view(features.size(0), -1)
+        out = torch.cat([out, O], 1)
+        out = net.classifier(out)
+        return out
