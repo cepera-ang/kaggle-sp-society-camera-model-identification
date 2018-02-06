@@ -43,7 +43,8 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for zz in range(1):
+    for zz in range(10):
+        print('Iteration: {}'.format(zz))
         num_folds = random.randint(3, 5)
         eta = random.uniform(0.1, 0.3)
         max_depth = random.randint(1, 2)
@@ -85,8 +86,6 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
 
         print('Train shape:', train.shape)
         ret = get_kfold_split_xgboost(train, num_folds, iter1+zz)
-
-
 
         fold_num = 0
         for train_files, valid_files in ret:
@@ -343,5 +342,29 @@ if __name__ == '__main__':
 
 
 '''
+Default score: 0.991120
+HTC-1-M7: [133, 131]
+iPhone-6: [134, 132]
+Motorola-Droid-Maxx: [134, 133]
+Motorola-X: [132, 132]
+Samsung-Galaxy-S4: [135, 131]
+iPhone-4s: [135, 133]
+LG-Nexus-5x: [89, 122]
+Motorola-Nexus-6: [151, 140]
+Samsung-Galaxy-Note3: [142, 133]
+Sony-NEX-7: [135, 133]
+Difference in 68 pos from 2640. Percent: 2.58%
 
+Default score: 0.990747
+HTC-1-M7: [134, 131]
+iPhone-6: [134, 132]
+Motorola-Droid-Maxx: [132, 133]
+Motorola-X: [132, 132]
+Samsung-Galaxy-S4: [135, 131]
+iPhone-4s: [134, 133]
+LG-Nexus-5x: [91, 124]
+Motorola-Nexus-6: [151, 139]
+Samsung-Galaxy-Note3: [142, 132]
+Sony-NEX-7: [135, 133]
+Difference in 63 pos from 2640. Percent: 2.39% LB: 0.982
 '''
