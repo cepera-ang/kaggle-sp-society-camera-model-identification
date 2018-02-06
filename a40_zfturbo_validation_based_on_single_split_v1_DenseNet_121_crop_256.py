@@ -132,8 +132,8 @@ def run_validation_single():
         manipulated_batch = []
         manipulated = 0.0
 
-        for start0 in range(0, img_init.shape[0], 96):
-            for start1 in range(0, img_init.shape[1], 96):
+        for start0 in range(0, img_init.shape[0], 128):
+            for start1 in range(0, img_init.shape[1], 128):
                 end0 = start0 + CROP_SIZE
                 if end0 > img_init.shape[0]:
                     continue
@@ -329,8 +329,8 @@ def proc_tst_and_create_subm():
         j = 0
         img_batch = []
         manipulated_batch = []
-        for start0 in range(0, img_init.shape[0], 96):
-            for start1 in range(0, img_init.shape[1], 96):
+        for start0 in range(0, img_init.shape[0], 128):
+            for start1 in range(0, img_init.shape[1], 128):
                 end0 = start0 + CROP_SIZE
                 if end0 > img_init.shape[0]:
                     continue
@@ -391,7 +391,7 @@ def proc_tst_and_create_subm():
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.model = MODELS_PATH + 'DenseNet169_do0.3_doc0.0_avg-fold_1-epoch080-val_acc0.970985.hdf5'
+    args.model = MODELS_PATH + 'DenseNet121_do0.3_doc0.0_avg-fold_1-epoch113-val_acc0.954670.hdf5'
 
     if 1:
         # Validation
@@ -408,7 +408,7 @@ if __name__ == '__main__':
     print('Time: {:.0f} sec'.format(time.time() - start_time))
 
 '''
-DenseNet169_do0.3_doc0.0_avg-fold_1-epoch080-val_acc0.970985.hdf5
+DenseNet121_do0.3_doc0.0_avg-fold_1-epoch113-val_acc0.954670.hdf5
 
 
 '''

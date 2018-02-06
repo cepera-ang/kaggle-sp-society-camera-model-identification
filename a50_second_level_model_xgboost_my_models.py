@@ -33,88 +33,105 @@ def get_kfold_split_xgboost(train, num_folds=4, seed=66):
     return ret
 
 
-def create_xgboost_model(train, features, eta_value, depth, iter1):
+def create_xgboost_model(train_init, features, eta_value, depth, iter1):
     import xgboost as xgb
     print('XGBoost version: {}'.format(xgb.__version__))
     start_time = time.time()
 
-    num_folds = 4
-    eta = eta_value
-    max_depth = depth
-    subsample = 0.9
-    colsample_bytree = 0.9
-    # eval_metric = 'mlogloss'
-    eval_metric = 'merror'
-    unique_target = np.array(sorted(train['target'].unique()))
-    print('Target length: {}: {}'.format(len(unique_target), unique_target))
-
-    log_str = 'XGBoost iter {}. FOLDS: {} METRIC: {} ETA: {}, MAX_DEPTH: {}, SUBSAMPLE: {}, COLSAMPLE_BY_TREE: {}'.format(0,
-                                                                                                           num_folds,
-                                                                                                           eval_metric,
-                                                                                                           eta,
-                                                                                                           max_depth,
-                                                                                                           subsample,
-                                                                                                           colsample_bytree)
-    print(log_str)
-    params = {
-        "objective": "multi:softprob",
-        "num_class": len(unique_target),
-        "booster": "gbtree",
-        "eval_metric": eval_metric,
-        "eta": eta,
-        "tree_method": 'exact',
-        "max_depth": max_depth,
-        "subsample": subsample,
-        "colsample_bytree": colsample_bytree,
-        "silent": 1,
-        "seed": 2017,
-        "nthread": 6,
-        # 'gpu_id': 0,
-        # 'updater': 'grow_gpu_hist',
-    }
-    num_boost_round = 1500
-    early_stopping_rounds = 25
-
-    print('Train shape:', train.shape)
-    ret = get_kfold_split_xgboost(train, num_folds, iter1)
-
+    rescaled = 2*(len(train_init) // 9)
     model_list = []
-    full_preds = np.zeros((train.shape[0], len(CLASSES)), dtype=np.float32)
-    counts = np.zeros((train.shape[0], len(CLASSES)), dtype=np.float32)
-    fold_num = 0
-    for train_files, valid_files in ret:
-        fold_num += 1
-        print('Start fold {}'.format(fold_num))
+    full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
+    counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-        train_index = train['name'].isin(train_files)
-        valid_index = train['name'].isin(valid_files)
-        X_train = train.loc[train_index]
-        X_valid = train.loc[valid_index]
-        y_train = X_train['target']
-        y_valid = X_valid['target']
+    for zz in range(100):
+        # Нам надо оставить только одну случайную манипуляцию для каждого файла
+        ids = []
+        for i in range(0, len(train_init), 9):
+            ids.append(i)
+            random_shift = random.randint(1, 8)
+            ids.append(i+random_shift)
+        print(len(ids))
+        train = train_init.loc[ids].copy()
+        train.loc[train['manip'] > 0, 'manip'] = 1
 
-        print('Train data:', X_train.shape)
-        print('Valid data:', X_valid.shape)
+        num_folds = random.randint(3, 5)
+        eta = random.uniform(0.1, 0.3)
+        max_depth = random.randint(1, 2)
+        subsample = 0.9
+        colsample_bytree = 0.9
+        if random.randint(0, 1) == 0:
+            eval_metric = 'mlogloss'
+        else:
+            eval_metric = 'merror'
+        unique_target = np.array(sorted(train['target'].unique()))
+        print('Target length: {}: {}'.format(len(unique_target), unique_target))
 
-        dtrain = xgb.DMatrix(X_train[features].as_matrix(), y_train)
-        dvalid = xgb.DMatrix(X_valid[features].as_matrix(), y_valid)
+        log_str = 'XGBoost iter {}. FOLDS: {} METRIC: {} ETA: {}, MAX_DEPTH: {}, SUBSAMPLE: {}, COLSAMPLE_BY_TREE: {}'.format(0,
+                                                                                                               num_folds,
+                                                                                                               eval_metric,
+                                                                                                               eta,
+                                                                                                               max_depth,
+                                                                                                               subsample,
+                                                                                                               colsample_bytree)
+        print(log_str)
+        params = {
+            "objective": "multi:softprob",
+            "num_class": len(unique_target),
+            "booster": "gbtree",
+            "eval_metric": eval_metric,
+            "eta": eta,
+            "tree_method": 'exact',
+            "max_depth": max_depth,
+            "subsample": subsample,
+            "colsample_bytree": colsample_bytree,
+            "silent": 1,
+            "seed": 2017,
+            "nthread": 6,
+            # 'gpu_id': 0,
+            # 'updater': 'grow_gpu_hist',
+        }
+        num_boost_round = 1500
+        early_stopping_rounds = 25
 
-        watchlist = [(dtrain, 'train'), (dvalid, 'eval')]
-        gbm = xgb.train(params, dtrain, num_boost_round, evals=watchlist,
-                        early_stopping_rounds=early_stopping_rounds, verbose_eval=True)
-        model_list.append(gbm)
+        print('Train shape:', train.shape)
+        ret = get_kfold_split_xgboost(train, num_folds, iter1+zz)
 
-        imp = get_importance(gbm, features)
-        print('Importance: {}'.format(imp))
 
-        print("Validating...")
-        pred = gbm.predict(dvalid, ntree_limit=gbm.best_iteration + 1)
-        full_preds[valid_index, :] += pred
-        counts[valid_index, :] += 1
 
-        pred_index = np.argmax(pred, axis=1)
-        score = accuracy_score(y_valid, pred_index)
-        print('Fold {} acc: {}'.format(fold_num, score))
+        fold_num = 0
+        for train_files, valid_files in ret:
+            fold_num += 1
+            print('Start fold {}'.format(fold_num))
+
+            train_index = train['name'].isin(train_files)
+            valid_index = train['name'].isin(valid_files)
+            X_train = train.loc[train_index]
+            X_valid = train.loc[valid_index]
+            y_train = X_train['target']
+            y_valid = X_valid['target']
+
+            print('Train data:', X_train.shape)
+            print('Valid data:', X_valid.shape)
+
+            dtrain = xgb.DMatrix(X_train[features].as_matrix(), y_train)
+            dvalid = xgb.DMatrix(X_valid[features].as_matrix(), y_valid)
+
+            watchlist = [(dtrain, 'train'), (dvalid, 'eval')]
+            gbm = xgb.train(params, dtrain, num_boost_round, evals=watchlist,
+                            early_stopping_rounds=early_stopping_rounds, verbose_eval=True)
+            model_list.append(gbm)
+
+            imp = get_importance(gbm, features)
+            print('Importance: {}'.format(imp))
+
+            print("Validating...")
+            pred = gbm.predict(dvalid, ntree_limit=gbm.best_iteration + 1)
+            full_preds[valid_index, :] += pred
+            counts[valid_index, :] += 1
+
+            pred_index = np.argmax(pred, axis=1)
+            score = accuracy_score(y_valid, pred_index)
+            print('Fold {} acc: {}'.format(fold_num, score))
 
     full_preds /= counts
     score = accuracy_score(train['target'].values, np.argmax(full_preds, axis=1))
@@ -125,16 +142,17 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
     s[CLASSES] = full_preds
     s.to_csv(SUBM_PATH + 'ensemble_res/subm_{}_{}_train.csv'.format('xgboost', iter1), index=False)
 
-    s['target'] = train['target']
-    norm_score = 0
-    for i in range(len(CLASSES)):
-        part = s[s['target'] == i]
-        pscore = accuracy_score(part['target'].values, np.argmax(part[CLASSES].as_matrix(), axis=1))
-        print('{} acc {}'.format(CLASSES[i], pscore))
-        norm_score += pscore
+    if 0:
+        s['target'] = train['target']
+        norm_score = 0
+        for i in range(len(CLASSES)):
+            part = s[s['target'] == i]
+            pscore = accuracy_score(part['target'].values, np.argmax(part[CLASSES].as_matrix(), axis=1))
+            print('{} acc {}'.format(CLASSES[i], pscore))
+            norm_score += pscore
 
     print('Default score: {:.6f}'.format(score))
-    print('Normalized score: {:.6f}'.format(norm_score/len(CLASSES)))
+    # print('Normalized score: {:.6f}'.format(norm_score/len(CLASSES)))
     print('Time: {} sec'.format(time.time() - start_time))
 
     return score, full_preds, model_list
@@ -209,10 +227,11 @@ def read_tables():
             main_data.append(v)
             main_name.append(nm)
             main_manip.append(0)
-            v = train.loc[i + augm_number:i + single, CLASSES].mean()
-            main_data.append(v)
-            main_name.append(nm)
-            main_manip.append(1)
+            for j in range(augm_number, single, augm_number):
+                v = train.loc[i + j:i + j + augm_number, CLASSES].mean()
+                main_data.append(v)
+                main_name.append(nm)
+                main_manip.append(j // augm_number)
         train = pd.DataFrame(main_data, columns=CLASSES)
         train['name'] = main_name
         train['manip'] = main_manip
@@ -267,6 +286,26 @@ def read_tables():
     return train, test, features
 
 
+def check_subm_distribution(subm_path):
+    df = pd.read_csv(subm_path)
+    checker = dict()
+    for c in CLASSES:
+        checker[c] = [0, 0]
+
+    manip = []
+    for index, row in df.iterrows():
+        if '_manip' in row['fname']:
+            checker[row['camera']][0] += 1
+            manip.append(1)
+        else:
+            checker[row['camera']][1] += 1
+            manip.append(0)
+    df['manip'] = manip
+
+    for c in CLASSES:
+        print('{}: {}'.format(c, checker[c]))
+
+
 def check_subm_diff(s1p, s2p):
     df1 = pd.read_csv(s1p)
     df2 = pd.read_csv(s2p)
@@ -301,6 +340,7 @@ def run_xgboost(eta, depth, iter1):
     subm['label_index'] = np.argmax(subm[CLASSES].as_matrix(), axis=1)
     subm['camera'] = np.array(CLASSES)[subm['label_index']]
     subm[['fname', 'camera']].to_csv(submission_file, index=False)
+    check_subm_distribution(submission_file)
     check_subm_diff(SUBM_PATH + '0.991_equal_2_pwr_mean_hun_5_prod-ce..csv', submission_file)
 
 
@@ -333,3 +373,20 @@ if __name__ == '__main__':
     # preproc_manip_densnet_201()
     run_xgboost(0.2, 1, 2)
     print("Elapsed time overall: %s seconds" % (time.time() - start_time))
+
+
+'''
+Difference in 120 pos from 2640. Percent: 4.55% - 100 iter
+
+HTC-1-M7: [138, 132]
+iPhone-6: [132, 133]
+Motorola-Droid-Maxx: [129, 134]
+Motorola-X: [135, 133]
+Samsung-Galaxy-S4: [134, 130]
+iPhone-4s: [134, 133]
+LG-Nexus-5x: [70, 105]
+Motorola-Nexus-6: [158, 145]
+Samsung-Galaxy-Note3: [156, 144]
+Sony-NEX-7: [134, 131]
+Difference in 120 pos from 2640. Percent: 4.55%
+'''
