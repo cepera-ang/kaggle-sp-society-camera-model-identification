@@ -2,7 +2,7 @@
 
 if __name__ == '__main__':
     import os
-    gpu_use = 3
+    gpu_use = 2
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
     os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
@@ -107,6 +107,7 @@ def run_validation_single():
     fnames = []
     real_class = []
     aug = []
+    manip_arr = []
     probs = np.array([]*10).reshape((0, 10))
 
     manipulation_stat = dict()
@@ -141,6 +142,7 @@ def run_validation_single():
             manipulated_batch[j] = manipulated
             fnames.append(idx.split("/")[-1])
             aug.append(j)
+            manip_arr.append(manipulated)
             j += 1
 
         l = img_batch.shape[0]
@@ -191,6 +193,7 @@ def run_validation_single():
                 manipulated_batch[j] = manipulated
                 fnames.append(idx.split("/")[-1])
                 aug.append(j)
+                manip_arr.append(manipulated)
                 j += 1
 
             l = img_batch.shape[0]
@@ -224,6 +227,7 @@ def run_validation_single():
     ans = pd.DataFrame()
     ans["name"] = fnames
     ans["aug"] = aug
+    ans["manip"] = manip_arr
     for i in range(10):
         ans[CLASSES[i]] = probs[:, i]
     out_path = SUBM_PATH + "/tta_8_" + os.path.basename(args.model) + '_train.csv'
@@ -296,6 +300,7 @@ def proc_tst_and_create_subm():
 
     fnames = []
     aug = []
+    manip_arr = []
     probs = np.array([]*10).reshape((0, 10))
     for i, idx in enumerate(tqdm(ids)):
         img = np.array(Image.open(idx))
@@ -313,6 +318,7 @@ def proc_tst_and_create_subm():
             manipulated_batch[j] = manipulated
             fnames.append(idx.split("/")[-1])
             aug.append(j)
+            manip_arr.append(manipulated)
             j += 1
 
         l = img_batch.shape[0]
@@ -338,6 +344,7 @@ def proc_tst_and_create_subm():
     ans = pd.DataFrame()
     ans["name"] = fnames
     ans["aug"] = aug
+    ans["manip"] = manip_arr
     for i in range(10):
         ans[CLASSES[i]] = probs[:, i]
     out_path = SUBM_PATH + "/tta_8_" + os.path.basename(args.model) + '_test.csv'
@@ -353,7 +360,7 @@ def proc_tst_and_create_subm():
 
 if __name__ == '__main__':
     start_time = time.time()
-    args.model = MODELS_PATH + 'DenseNet121_do0.3_doc0.0_avg-fold_1-epoch060-val_acc0.978571.hdf5'
+    args.model = MODELS_PATH + 'DenseNet201_do0.3_doc0.0_avg-fold_1-epoch053-val_acc0.901909.hdf5'
 
     if 1:
         # Validation
@@ -370,57 +377,17 @@ if __name__ == '__main__':
     print('Time: {:.0f} sec'.format(time.time() - start_time))
 
 '''
-DenseNet121_do0.3_doc0.0_avg-fold_1-epoch041-val_acc0.960884.hdf5
-
-Manipulation stat
-jpg70: [84, 1]
-jpg90: [101, 0]
-gamma0.8: [79, 1]
-gamma1.2: [109, 1]
-bicubic0.5: [93, 12]
-bicubic0.8: [76, 2]
-bicubic1.5: [95, 1]
-bicubic2.0: [93, 2]
-Accuracy no manipulation: 0.993333
-Accuracy with manipulation: 0.973333
-Accuracy overall: 0.987333
-
-HTC-1-M7: [138, 134]
-iPhone-6: [133, 134]
-Motorola-Droid-Maxx: [131, 133]
-Motorola-X: [127, 131]
-Samsung-Galaxy-S4: [137, 133]
-iPhone-4s: [138, 132]
-LG-Nexus-5x: [72, 109]
-Motorola-Nexus-6: [170, 155]
-Samsung-Galaxy-Note3: [138, 133]
-Sony-NEX-7: [136, 126]
-Difference in 142 pos from 2640. Percent: 5.38%
-
-DenseNet121_do0.3_doc0.0_avg-fold_1-epoch060-val_acc0.978571.hdf5
-Manipulation stat
-jpg70: [84, 1]
-jpg90: [101, 0]
-gamma0.8: [79, 1]
-gamma1.2: [109, 1]
-bicubic0.5: [98, 7]
-bicubic0.8: [76, 2]
-bicubic1.5: [95, 1]
-bicubic2.0: [94, 1]
-Accuracy no manipulation: 0.993333
-Accuracy with manipulation: 0.981333
-Accuracy overall: 0.989733
-
-HTC-1-M7: [137, 134]
-iPhone-6: [131, 132]
-Motorola-Droid-Maxx: [132, 131]
-Motorola-X: [130, 131]
-Samsung-Galaxy-S4: [134, 132]
-iPhone-4s: [134, 132]
-LG-Nexus-5x: [73, 112]
-Motorola-Nexus-6: [168, 153]
-Samsung-Galaxy-Note3: [144, 135]
-Sony-NEX-7: [137, 128]
-Difference in 132 pos from 2640. Percent: 5.00%
-LB: 0.957
+DenseNet201_do0.3_doc0.0_avg-fold_1-epoch053-val_acc0.901909.hdf5
+HTC-1-M7: [140, 134]
+iPhone-6: [125, 133]
+Motorola-Droid-Maxx: [129, 132]
+Motorola-X: [133, 131]
+Samsung-Galaxy-S4: [137, 131]
+iPhone-4s: [136, 133]
+LG-Nexus-5x: [75, 111]
+Motorola-Nexus-6: [159, 144]
+Samsung-Galaxy-Note3: [149, 140]
+Sony-NEX-7: [137, 131]
+Difference in 113 pos from 2640. Percent: 4.28%
+Time: 15284 sec
 '''

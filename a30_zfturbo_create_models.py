@@ -2,10 +2,10 @@
 
 if __name__ == '__main__':
     import os
-    gpu_use = "0, 1, 2, 3"
+    gpu_use = "1, 3"
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
+    os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
 
 
 from a01_random_augmentations import *
@@ -77,8 +77,8 @@ def gen(items, batch_size, training=True):
     # class index
     y = np.empty((batch_size * valid_batch_factor), dtype=np.int64)
 
-    p = ThreadPool(cpu_count() - 2)
-    # p = ThreadPool(8)
+    # p = ThreadPool(cpu_count() - 2)
+    p = ThreadPool(8)
 
     transforms = VALIDATION_TRANSFORMS if validation else [[]]
 
@@ -193,7 +193,7 @@ def create_models(nfolds):
         if not args.no_fcs:
             x = Dense(512, activation='relu', name='fc1')(x)
             x = Dropout(args.dropout, name='dropout_fc1')(x)
-            x = Dense(128, activation='relu', name='fc2')(x)
+            x = Dense(256, activation='relu', name='fc2')(x)
             x = Dropout(args.dropout, name='dropout_fc2')(x)
         prediction = Dense(N_CLASSES, activation="softmax", name="predictions")(x)
 
@@ -262,7 +262,7 @@ def create_models(nfolds):
 
         history = model.fit_generator(
                 generator        = gen(ids_train, args.batch_size),
-                steps_per_epoch  = int(math.ceil(len(ids_train)  // (5 * args.batch_size))),
+                steps_per_epoch  = int(math.ceil(len(ids_train)  // (3 * args.batch_size))),
                 validation_data  = gen(ids_val, args.batch_size, training=False),
                 validation_steps = int(len(VALIDATION_TRANSFORMS) * math.ceil(len(ids_val) // args.batch_size)),
                 epochs=args.max_epoch,
@@ -271,7 +271,7 @@ def create_models(nfolds):
                 max_queue_size=40,
                 use_multiprocessing=False,
                 workers=1,
-                verbose=1,
+                verbose=2,
                 # class_weight=class_weight1,
         )
 
@@ -295,22 +295,25 @@ if __name__ == '__main__':
         args.learning_rate = 1e-5 * len(args.gpus)
         args.batch_size = 6 * len(args.gpus)
     if 1:
-        args.classifier = 'VGG16'
+        args.classifier = 'DenseNet169'
         args.gpus = [0, 1]
-        args.learning_rate = 1e-4 * len(args.gpus)
-        args.batch_size = 8 * len(args.gpus)
+        args.learning_rate = 4e-5 * len(args.gpus)
+        args.crop_size = 224
+        CROP_SIZE = args.crop_size
+        args.dropout = 0.3
+        args.batch_size = 10 * len(args.gpus)
     if 0:
         args.classifier = 'DenseNet121'
         args.gpus = [0, 1, 2]
         args.learning_rate = 1e-5 * len(args.gpus)
         args.batch_size = 7 * len(args.gpus)
-    if 1:
+    if 0:
         args.classifier = 'DenseNet201'
-        args.gpus = [0, 1, 2, 3]
+        args.gpus = [0, 1]
         args.learning_rate = 1e-5 * len(args.gpus)
-        args.batch_size = 4 * len(args.gpus)
+        args.batch_size = 5 * len(args.gpus)
 
-    # args.model = MODELS_PATH + 'VGG16_do0.3_doc0.0_avg-fold_1-epoch142-val_acc0.931046.hdf5'
+    # args.model = MODELS_PATH + 'DenseNet169_do0.3_doc0.0_avg-fold_1-epoch007-val_acc0.839416.hdf5'
     print('Batch size: {} Learning rate: {}'.format(args.batch_size, args.learning_rate))
     create_models(4)
     print('Time: {:.0f} sec'.format(time.time() - start_time))

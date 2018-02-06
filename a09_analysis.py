@@ -495,7 +495,7 @@ def check_subm_diff_simple(s1p, s2p):
 
 
 def check_subm_diff_table():
-    best = SUBM_PATH + 'equal_all_fix_0.983.csv'
+    best = SUBM_PATH + '0.991_equal_2_pwr_mean_hun_5_prod-ce..csv'
     subms = glob.glob(SUBM_PATH + 'subm_with_score/*.csv')
     for s in subms:
         dff, perc = check_subm_diff_simple(best, s)
@@ -589,11 +589,11 @@ if __name__ == '__main__':
     # tst_different_jpeg_readers()
     # check_reading_speed()
     # improve_subm_v1(SUBM_PATH + '3_sq_mean_raw.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
-    check_subm_distribution(SUBM_PATH + 'submission_resnet50_antorsaegen_119_val_0.9815068493150685_tta_arithmetic.csv')
-    check_subm_diff(SUBM_PATH + '0.985_equal_2_power_mean_hun.csv', SUBM_PATH + 'submission_resnet50_antorsaegen_119_val_0.9815068493150685_tta_arithmetic.csv')
+    # check_subm_distribution(SUBM_PATH + 'submission_resnet50_antorsaegen_119_val_0.9815068493150685_tta_arithmetic.csv')
+    # check_subm_diff(SUBM_PATH + '0.985_equal_2_power_mean_hun.csv', SUBM_PATH + 'submission_resnet50_antorsaegen_119_val_0.9815068493150685_tta_arithmetic.csv')
     # get_single_split_final(OUTPUT_PATH + 'common_image_info_additional.csv', OUTPUT_PATH + 'validation_files.pklz')
     # check_image_manipulation()
-    # check_subm_diff_table()
+    check_subm_diff_table()
     # check_gamma_change()
     # check_bicubic_change()
 
