@@ -19,7 +19,7 @@ def print_importance(features, gbm, prnt=True):
     return importance_arr
 
 
-def create_lightgbm_model(train, features, lr_value, iter1):
+def create_lightgbm_model(train, features, iter1):
     import lightgbm as lgb
     print('LightGBM version: {}'.format(lgb.__version__))
     start_time = time.time()
@@ -119,7 +119,7 @@ def create_lightgbm_model(train, features, lr_value, iter1):
     for a in CLASSES:
         s[a] = 0.0
     s[CLASSES] = full_preds
-    s.to_csv(SUBM_PATH + 'ensemble_res/subm_{}_{}_train.csv'.format('xgboost', iter1), index=False)
+    s.to_csv(SUBM_PATH + 'ensemble_res/subm_{}_{}_train.csv'.format('lightgbm', iter1), index=False)
 
     print('Default score: {:.6f}'.format(score))
     print('Time: {} sec'.format(time.time() - start_time))
@@ -149,7 +149,7 @@ def run_lightgbm(lr, iter1):
     gbm_type = 'lightgbm'
 
     if 1:
-        score, valid_pred, model_list = create_lightgbm_model(train, features, lr, iter1)
+        score, valid_pred, model_list = create_lightgbm_model(train, features, iter1)
         save_in_file((score, valid_pred, model_list), MODELS_PATH + 'lightgbm_last_run_models_{}.pklz'.format(iter1))
     else:
         score, valid_pred, model_list = load_from_file(MODELS_PATH + 'lightgbm_last_run_models_{}.pklz'.format(iter1))
@@ -190,5 +190,17 @@ Samsung-Galaxy-Note3: [144, 132]
 Sony-NEX-7: [135, 132]
 Difference in 67 pos from 2640. Percent: 2.54%
 
-
+20 models:
+Default score: 0.991182
+HTC-1-M7: [133, 131]
+iPhone-6: [133, 132]
+Motorola-Droid-Maxx: [132, 134]
+Motorola-X: [133, 132]
+Samsung-Galaxy-S4: [134, 131]
+iPhone-4s: [134, 133]
+LG-Nexus-5x: [89, 123]
+Motorola-Nexus-6: [152, 140]
+Samsung-Galaxy-Note3: [144, 132]
+Sony-NEX-7: [136, 132]
+Difference in 65 pos from 2640. Percent: 2.46%
 '''

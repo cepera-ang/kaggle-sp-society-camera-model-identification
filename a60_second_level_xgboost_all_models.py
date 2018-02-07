@@ -43,7 +43,7 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for zz in range(10):
+    for zz in range(2):
         print('Iteration: {}'.format(zz))
         num_folds = random.randint(3, 5)
         eta = random.uniform(0.1, 0.3)
@@ -181,6 +181,10 @@ def rescale_train(train):
         print(CLASSES[u], incr)
         for i in range(incr):
             new_train.append(part.copy())
+        if max_label > incr*l:
+            print('A: {}'.format(max_label-incr*l))
+            new_train.append(part[:max_label-incr*l].copy())
+
     train = pd.concat(new_train, axis=0)
     train.reset_index(drop=True, inplace=True)
     print(len(train))
@@ -272,6 +276,15 @@ def read_tables():
     if is_null:
         print('Test contains null!')
         exit()
+
+    uni = pd.value_counts(train['target'])
+    print('Target counts:')
+    print(uni)
+    print('Rescale it!')
+    train = rescale_train(train)
+    uni = pd.value_counts(train['target'])
+    print('Target counts:')
+    print(uni)
 
     return train, test, features
 
@@ -367,4 +380,19 @@ Motorola-Nexus-6: [151, 139]
 Samsung-Galaxy-Note3: [142, 132]
 Sony-NEX-7: [135, 133]
 Difference in 63 pos from 2640. Percent: 2.39% LB: 0.982
+
+Rescale:
+Default score: 0.987413
+Time: 465.3627233505249 sec
+HTC-1-M7: [133, 131]
+iPhone-6: [134, 132]
+Motorola-Droid-Maxx: [131, 133]
+Motorola-X: [133, 132]
+Samsung-Galaxy-S4: [134, 131]
+iPhone-4s: [134, 133]
+LG-Nexus-5x: [94, 124]
+Motorola-Nexus-6: [148, 138]
+Samsung-Galaxy-Note3: [142, 132]
+Sony-NEX-7: [137, 134]
+Difference in 58 pos from 2640. Percent: 2.20%
 '''
