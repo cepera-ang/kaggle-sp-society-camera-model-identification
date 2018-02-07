@@ -6,6 +6,7 @@ import datetime
 from operator import itemgetter
 from a00_common_functions import *
 from sklearn.metrics import accuracy_score
+from sklearn.utils import class_weight
 
 
 def create_feature_map(features):
@@ -43,7 +44,7 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for zz in range(2):
+    for zz in range(20):
         print('Iteration: {}'.format(zz))
         num_folds = random.randint(3, 5)
         eta = random.uniform(0.1, 0.3)
@@ -102,8 +103,23 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
             print('Train data:', X_train.shape)
             print('Valid data:', X_valid.shape)
 
-            dtrain = xgb.DMatrix(X_train[features].as_matrix(), y_train)
-            dvalid = xgb.DMatrix(X_valid[features].as_matrix(), y_valid)
+            if 1:
+                sample_weight_train = class_weight.compute_sample_weight('balanced', y_train)
+                sample_weight_valid = class_weight.compute_sample_weight('balanced', y_valid)
+                class_weight1 = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
+                coeff1 = random.randint(100, 200)
+                coeff2 = random.randint(2, 4)
+                sample_weight_train[y_train == CLASSES.index('LG-Nexus-5x')] *= coeff1
+                sample_weight_valid[y_valid == CLASSES.index('LG-Nexus-5x')] *= coeff1
+                sample_weight_train[y_train == CLASSES.index('Motorola-Nexus-6')] *= coeff2
+                sample_weight_valid[y_valid == CLASSES.index('Motorola-Nexus-6')] *= coeff2
+                # print(sample_weight1)
+                print('Class weights train: {}'.format(np.unique(sample_weight_train)))
+                print('Class weights valid: {}'.format(np.unique(sample_weight_valid)))
+
+
+            dtrain = xgb.DMatrix(X_train[features].as_matrix(), y_train, weight=sample_weight_train)
+            dvalid = xgb.DMatrix(X_valid[features].as_matrix(), y_valid, weight=sample_weight_valid)
 
             watchlist = [(dtrain, 'train'), (dvalid, 'eval')]
             gbm = xgb.train(params, dtrain, num_boost_round, evals=watchlist,
@@ -184,6 +200,9 @@ def rescale_train(train):
         if max_label > incr*l:
             print('A: {}'.format(max_label-incr*l))
             new_train.append(part[:max_label-incr*l].copy())
+        if CLASSES[u] == 'LG-Nexus-5x':
+            for ii in range(200):
+                new_train.append(part.copy())
 
     train = pd.concat(new_train, axis=0)
     train.reset_index(drop=True, inplace=True)
@@ -197,13 +216,14 @@ def rename_columns(tbl, suffix):
     return tbl
 
 
-def read_tables():
+def read_tables(rescale=True):
     train_list = [
         (SUBM_PATH + 'ensemble_big/976_tta_8_densenet201_antorsaegen_62_0.98271093_train.hdf5', 1),
         (SUBM_PATH + 'ensemble_big/977_tta_8_resnet50_antorsaegen_119_val_0.9815_train.hdf5', 1),
         (SUBM_PATH + 'ensemble_big/DenseNet201_do0.3_doc0.0_avg-epoch072-val_acc0.981250_train.hdf5', 1),
         (SUBM_PATH + 'ensemble_big/InceptionResNetV2_do0.1_avg-epoch154-val_acc0.965625_train.hdf5', 1),
         (SUBM_PATH + 'ensemble_big/Xception_do0.3_avg-epoch079-val_acc0.991667_train.hdf5', 1),
+        (SUBM_PATH + 'ensemble_big/984_tta_8_densenet201_29_0.98624_train.hdf5', 1),
     ]
 
     full_train = []
@@ -263,6 +283,12 @@ def read_tables():
             exit()
     train['target'] = target
 
+    if 0:
+        sz_train = pd.read_csv(SUBM_PATH + 'ensemble_big/sizes/test_new_size_byte.csv')
+        train = pd.merge(train, sz_train, on='name', left_index=True)
+        sz_test = pd.read_csv(SUBM_PATH + 'ensemble_big/sizes/test_prod_size_byte.csv')
+        test = pd.merge(test, sz_test, on='name', left_index=True)
+
     features = list(train.columns.values)
     features.remove('name')
     features.remove('target')
@@ -280,11 +306,12 @@ def read_tables():
     uni = pd.value_counts(train['target'])
     print('Target counts:')
     print(uni)
-    print('Rescale it!')
-    train = rescale_train(train)
-    uni = pd.value_counts(train['target'])
-    print('Target counts:')
-    print(uni)
+    if rescale is True:
+        print('Rescale it!')
+        train = rescale_train(train)
+        uni = pd.value_counts(train['target'])
+        print('Target counts:')
+        print(uni)
 
     return train, test, features
 
@@ -323,7 +350,7 @@ def check_subm_diff(s1p, s2p):
 
 
 def run_xgboost(eta, depth, iter1):
-    train, test, features = read_tables()
+    train, test, features = read_tables(rescale=False)
     gbm_type = 'xgboost'
 
     if 1:
@@ -368,6 +395,7 @@ Samsung-Galaxy-Note3: [142, 133]
 Sony-NEX-7: [135, 133]
 Difference in 68 pos from 2640. Percent: 2.58%
 
+Default run
 Default score: 0.990747
 HTC-1-M7: [134, 131]
 iPhone-6: [134, 132]
@@ -381,7 +409,7 @@ Samsung-Galaxy-Note3: [142, 132]
 Sony-NEX-7: [135, 133]
 Difference in 63 pos from 2640. Percent: 2.39% LB: 0.982
 
-Rescale:
+Rescale (uniform):
 Default score: 0.987413
 Time: 465.3627233505249 sec
 HTC-1-M7: [133, 131]
@@ -395,4 +423,63 @@ Motorola-Nexus-6: [148, 138]
 Samsung-Galaxy-Note3: [142, 132]
 Sony-NEX-7: [137, 134]
 Difference in 58 pos from 2640. Percent: 2.20%
+
+Rescale (uniform + Nexus*4):
+Default score: 0.984956
+Time: 465.3627233505249 sec
+HTC-1-M7: [133, 131]
+iPhone-6: [134, 132]
+Motorola-Droid-Maxx: [132, 133]
+Motorola-X: [133, 132]
+Samsung-Galaxy-S4: [133, 131]
+iPhone-4s: [134, 132]
+LG-Nexus-5x: [99, 126]
+Motorola-Nexus-6: [144, 138]
+Samsung-Galaxy-Note3: [141, 132]
+Sony-NEX-7: [137, 133]
+Difference in 52 pos from 2640. Percent: 1.97%
+
+Rescale (uniform + Nexus*50):
+Default score: 0.986832
+Time: 450.1165554523468 sec
+HTC-1-M7: [133, 131]
+iPhone-6: [133, 132]
+Motorola-Droid-Maxx: [133, 133]
+Motorola-X: [133, 132]
+Samsung-Galaxy-S4: [133, 131]
+iPhone-4s: [135, 132]
+LG-Nexus-5x: [116, 128]
+Motorola-Nexus-6: [130, 137]
+Samsung-Galaxy-Note3: [139, 132]
+Sony-NEX-7: [135, 132]
+Difference in 44 pos from 2640. Percent: 1.67%
+
+Rescale (uniform + Nexus*200):
+Default score: 0.992147
+Time: 990.5899105072021 sec
+HTC-1-M7: [133, 131]
+iPhone-6: [133, 132]
+Motorola-Droid-Maxx: [132, 133]
+Motorola-X: [132, 132]
+Samsung-Galaxy-S4: [133, 131]
+iPhone-4s: [134, 132]
+LG-Nexus-5x: [126, 131]
+Motorola-Nexus-6: [122, 135]
+Samsung-Galaxy-Note3: [138, 132]
+Sony-NEX-7: [137, 131]
+Difference in 46 pos from 2640. Percent: 1.74%
+
+v1: 20 runs (uniform + Nexus*200)
+XGBoost iter 0. FOLDS: 5 METRIC: merror ETA: 0.22576181674273743, MAX_DEPTH: 1, SUBSAMPLE: 0.9, COLSAMPLE_BY_TREE: 0.9
+HTC-1-M7: [132, 131]
+iPhone-6: [133, 132]
+Motorola-Droid-Maxx: [133, 133]
+Motorola-X: [132, 132]
+Samsung-Galaxy-S4: [133, 131]
+iPhone-4s: [134, 132]
+LG-Nexus-5x: [132, 136]
+Motorola-Nexus-6: [117, 130]
+Samsung-Galaxy-Note3: [138, 132]
+Sony-NEX-7: [136, 131]
+Difference in 50 pos from 2640. Percent: 1.89%
 '''

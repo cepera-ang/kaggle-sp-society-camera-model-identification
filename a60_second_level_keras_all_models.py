@@ -16,6 +16,7 @@ if __name__ == '__main__':
 import math
 import datetime
 from sklearn.metrics import accuracy_score
+from sklearn.utils import class_weight
 from a00_common_functions import *
 from a60_second_level_xgboost_all_models import read_tables, rename_columns, check_subm_distribution, check_subm_diff, get_kfold_split_xgboost
 
@@ -30,16 +31,25 @@ def batch_generator_train_blender_random_sample(X, y, batch_size):
         yield input1, output1
 
 
-def ZF_keras_blender_v2(input_features):
+def ZF_random_keras_blender(input_features):
     from keras.models import Model
     from keras.layers import Input, Dense
     from keras.layers.core import Dropout
 
+    layers_number = random.randint(1, 2)
+    layer1_neurons = random.randint(input_features // 2, 2*input_features)
+    layer2_neurons = random.randint(input_features // 2, layer1_neurons)
+    layer1_droupout = random.uniform(0.3, 0.6)
+    layer2_droupout = random.uniform(0.3, 0.6)
+    layer1_activation = random.choice(['relu', 'sigmoid', 'tanh'])
+    layer2_activation = random.choice(['relu', 'sigmoid', 'tanh'])
+
     inputs1 = Input((input_features,))
-    x = Dense(input_features, activation='relu')(inputs1)
-    x = Dropout(0.5)(x)
-    x = Dense(input_features, activation='relu')(x)
-    x = Dropout(0.5)(x)
+    x = Dense(layer1_neurons, activation=layer1_activation)(inputs1)
+    x = Dropout(layer1_droupout)(x)
+    if layers_number == 2:
+        x = Dense(layer2_neurons, activation=layer2_activation)(x)
+        x = Dropout(layer2_droupout)(x)
     x = Dense(10, activation='sigmoid', name='predictions')(x)
 
     model = Model(inputs=inputs1, outputs=x)
@@ -77,13 +87,10 @@ def create_keras_blender_model(train, features):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for iter in range(1):
-        restore = 0
+    for iter in range(7):
         num_folds = random.randint(3, 5)
-        model_type = random.randint(0, 1)
-
-        print('Train shape:', train.shape)
-        ret = get_kfold_split_xgboost(train, num_folds, iter)
+        print('Iteration: {} Train shape: {}'.format(iter, train.shape))
+        ret = get_kfold_split_xgboost(train, num_folds, iter + 100)
 
         fold_num = 0
         for train_files, valid_files in ret:
@@ -99,30 +106,32 @@ def create_keras_blender_model(train, features):
             y_train_cat = to_categorical(y_train, len(CLASSES))
             y_valid_cat = to_categorical(y_valid, len(CLASSES))
 
+            class_weight1 = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
+            class_weight1[6] *= random.randint(20, 50)
+            print('Class weights: {}'.format(class_weight1))
             print('Train data:', X_train.shape, y_train_cat.shape)
             print('Valid data:', X_valid.shape, y_valid_cat.shape)
 
             # K.set_image_dim_ordering('th')
-            if model_type == 1:
-                cnn_type = 'ZF_keras_blender_v2'
-                print('Creating and compiling model [{}]...'.format(cnn_type))
-                final_model_path = MODELS_PATH + '{}_fold_{}.h5'.format(cnn_type, fold_num)
-                cache_model_path = MODELS_PATH + '{}_temp_fold_{}.h5'.format(cnn_type, fold_num)
-                model = ZF_keras_blender_v2(len(features))
-            else:
-                cnn_type = 'ZF_keras_blender_v3'
-                print('Creating and compiling model [{}]...'.format(cnn_type))
-                final_model_path = MODELS_PATH + '{}_fold_{}.h5'.format(cnn_type, fold_num)
-                cache_model_path = MODELS_PATH + '{}_temp_fold_{}.h5'.format(cnn_type, fold_num)
-                model = ZF_keras_blender_v3(len(features))
 
-            optim_name = 'Adam'
-            batch_size = 48
-            learning_rate = 0.00005
-            epochs = 1
-            patience = 50
+            cnn_type = 'ZF_random_keras_blender'
+            print('Creating and compiling model [{}]...'.format(cnn_type))
+            final_model_path = MODELS_PATH + '{}_fold_{}.h5'.format(cnn_type, fold_num)
+            cache_model_path = MODELS_PATH + '{}_temp_fold_{}.h5'.format(cnn_type, fold_num)
+            model = ZF_random_keras_blender(len(features))
+
+            if random.randint(0, 1) == 0:
+                optim_name = 'SGD'
+                learning_rate = random.uniform(0.001, 0.005)
+            else:
+                optim_name = 'Adam'
+                learning_rate = random.uniform(0.001, 0.0001)
+
+            batch_size = random.randint(16, 64)
+            epochs = 10000
+            patience = random.randint(8, 15)
             print('Batch size: {}'.format(batch_size))
-            print('Learning rate: {}'.format(learning_rate))
+            print('Optim: {} Learning rate: {}'.format(optim_name, learning_rate))
             steps_per_epoch = (X_train.shape[0] // batch_size)
             validation_steps = 2*(X_valid.shape[0] // batch_size)
             print('Steps train: {}, Steps valid: {}'.format(steps_per_epoch, validation_steps))
@@ -134,8 +143,8 @@ def create_keras_blender_model(train, features):
             model.compile(optimizer=optim, loss='categorical_crossentropy', metrics=['accuracy'])
 
             callbacks = [
-                EarlyStopping(monitor='val_loss', patience=patience, verbose=0),
-                ModelCheckpoint(cache_model_path, monitor='val_loss', save_best_only=True, verbose=0),
+                EarlyStopping(monitor='val_acc', patience=patience, verbose=0),
+                ModelCheckpoint(cache_model_path, monitor='val_acc', save_best_only=True, verbose=0),
             ]
 
             history = model.fit_generator(generator=batch_generator_train_blender_random_sample(X_train[features].as_matrix().copy(), y_train_cat.copy(), batch_size),
@@ -145,10 +154,12 @@ def create_keras_blender_model(train, features):
                                       validation_steps=validation_steps,
                                       verbose=2,
                                       max_queue_size=16,
-                                      callbacks=callbacks)
+                                      callbacks=callbacks,
+                                      class_weight=class_weight1)
 
             min_loss = min(history.history['val_loss'])
-            print('Minimum loss for given fold: ', min_loss)
+            max_acc = max(history.history['val_acc'])
+            print('Loss for fold {}: {:.6f} Train acc: {:.6f}'.format(fold_num, min_loss, max_acc))
             model.load_weights(cache_model_path)
             model.save(final_model_path)
 
@@ -166,7 +177,7 @@ def create_keras_blender_model(train, features):
 
             pred_index = np.argmax(pred, axis=1)
             score = accuracy_score(y_valid, pred_index)
-            print('Fold {} acc: {}'.format(fold_num, score))
+            print('Fold {} acc: {:.6f}'.format(fold_num, score))
             model_list.append(model)
 
     full_preds /= counts
@@ -199,7 +210,7 @@ def get_readable_date(dt):
 
 
 def run_keras():
-    train, test, features = read_tables()
+    train, test, features = read_tables(rescale=False)
     gbm_type = 'keras_blender'
 
     score, valid_pred, model_list = create_keras_blender_model(train, features)

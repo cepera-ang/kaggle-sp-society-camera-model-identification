@@ -6,6 +6,7 @@ import datetime
 from sklearn.metrics import accuracy_score
 from a00_common_functions import *
 from a60_second_level_xgboost_all_models import read_tables, rename_columns, check_subm_distribution, check_subm_diff, get_kfold_split_xgboost
+from sklearn.utils import class_weight
 
 
 def print_importance(features, gbm, prnt=True):
@@ -29,7 +30,7 @@ def create_lightgbm_model(train, features, iter1):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for iter in range(20):
+    for iter in range(1):
 
         # Debug
         num_folds = random.randint(3, 5)
@@ -94,8 +95,21 @@ def create_lightgbm_model(train, features, iter1):
             print('Train data:', X_train.shape)
             print('Valid data:', X_valid.shape)
 
-            lgb_train = lgb.Dataset(X_train[features].as_matrix(), y_train)
-            lgb_eval = lgb.Dataset(X_valid[features].as_matrix(), y_valid, reference=lgb_train)
+            if 1:
+                sample_weight_train = class_weight.compute_sample_weight('balanced', y_train)
+                sample_weight_valid = class_weight.compute_sample_weight('balanced', y_valid)
+                class_weight1 = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
+                coeff1 = random.randint(100, 1000)
+                sample_weight_train[y_train == CLASSES.index('LG-Nexus-5x')] *= coeff1
+                sample_weight_valid[y_valid == CLASSES.index('LG-Nexus-5x')] *= coeff1
+                # print(sample_weight1)
+                print('Class weights train: {}'.format(np.unique(sample_weight_train)))
+                print('Class weights valid: {}'.format(np.unique(sample_weight_valid)))
+                # print(class_weight1)
+                # exit()
+
+            lgb_train = lgb.Dataset(X_train[features].as_matrix(), y_train, weight=sample_weight_train)
+            lgb_eval = lgb.Dataset(X_valid[features].as_matrix(), y_valid, weight=sample_weight_valid, reference=lgb_train)
 
             gbm = lgb.train(params, lgb_train, num_boost_round=num_boost_round,
                             early_stopping_rounds=early_stopping_rounds, valid_sets=[lgb_eval], verbose_eval=True)
@@ -145,7 +159,7 @@ def get_readable_date(dt):
 
 
 def run_lightgbm(lr, iter1):
-    train, test, features = read_tables()
+    train, test, features = read_tables(rescale=False)
     gbm_type = 'lightgbm'
 
     if 1:
@@ -203,4 +217,30 @@ Motorola-Nexus-6: [152, 140]
 Samsung-Galaxy-Note3: [144, 132]
 Sony-NEX-7: [136, 132]
 Difference in 65 pos from 2640. Percent: 2.46%
+
+1 model + rescale
+HTC-1-M7: [133, 131]
+iPhone-6: [132, 132]
+Motorola-Droid-Maxx: [131, 133]
+Motorola-X: [133, 132]
+Samsung-Galaxy-S4: [134, 131]
+iPhone-4s: [134, 132]
+LG-Nexus-5x: [98, 126]
+Motorola-Nexus-6: [147, 139]
+Samsung-Galaxy-Note3: [142, 132]
+Sony-NEX-7: [136, 132]
+Difference in 53 pos from 2640. Percent: 2.01%
+
+1 model + rescale
+HTC-1-M7: [133, 131]
+iPhone-6: [132, 132]
+Motorola-Droid-Maxx: [132, 133]
+Motorola-X: [134, 132]
+Samsung-Galaxy-S4: [132, 131]
+iPhone-4s: [135, 132]
+LG-Nexus-5x: [109, 129]
+Motorola-Nexus-6: [142, 138]
+Samsung-Galaxy-Note3: [138, 132]
+Sony-NEX-7: [133, 130]
+Difference in 49 pos from 2640. Percent: 1.86%
 '''
