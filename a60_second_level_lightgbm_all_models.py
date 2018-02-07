@@ -29,11 +29,10 @@ def create_lightgbm_model(train, features, lr_value, iter1):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for zz in range(20):
+    for iter in range(20):
 
         # Debug
         num_folds = random.randint(3, 5)
-        iter = 0
         random_state = 10
         rs = 69
         learning_rate = random.uniform(0.01, 0.05)
@@ -78,9 +77,8 @@ def create_lightgbm_model(train, features, lr_value, iter1):
         early_stopping_rounds = 50
 
         print('Train shape:', train.shape)
-        ret = get_kfold_split_xgboost(train, num_folds, iter1 + zz)
+        ret = get_kfold_split_xgboost(train, num_folds, iter1 + iter)
 
-        model_list = []
         fold_num = 0
         for train_files, valid_files in ret:
             fold_num += 1
