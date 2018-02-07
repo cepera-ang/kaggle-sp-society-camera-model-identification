@@ -410,5 +410,16 @@ if __name__ == '__main__':
 '''
 DenseNet121_do0.3_doc0.0_avg-fold_1-epoch113-val_acc0.954670.hdf5
 
+HTC-1-M7: [132, 131]
+iPhone-6: [130, 133]
+Motorola-Droid-Maxx: [129, 133]
+Motorola-X: [129, 130]
+Samsung-Galaxy-S4: [139, 132]
+iPhone-4s: [135, 133]
+LG-Nexus-5x: [69, 102]
+Motorola-Nexus-6: [162, 142]
+Samsung-Galaxy-Note3: [159, 151]
+Sony-NEX-7: [136, 133]
+Difference in 119 pos from 2640. Percent: 4.51%
 
 '''
