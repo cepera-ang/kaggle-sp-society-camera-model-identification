@@ -129,7 +129,7 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
     for a in CLASSES:
         s[a] = 0.0
     s[CLASSES] = full_preds
-    s.to_csv(SUBM_PATH + 'ensemble_res/subm_{}_{}_train.csv'.format('xgboost', iter1), index=False)
+    s.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_{}_train.csv'.format('xgboost', iter1), index=False)
 
     if 0:
         s['target'] = train['target']

@@ -77,7 +77,7 @@ def create_keras_blender_model(train, features):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for iter in range(2):
+    for iter in range(1):
         restore = 0
         num_folds = random.randint(3, 5)
         model_type = random.randint(0, 1)
@@ -119,7 +119,7 @@ def create_keras_blender_model(train, features):
             optim_name = 'Adam'
             batch_size = 48
             learning_rate = 0.00005
-            epochs = 10000
+            epochs = 1
             patience = 50
             print('Batch size: {}'.format(batch_size))
             print('Learning rate: {}'.format(learning_rate))
@@ -160,7 +160,7 @@ def create_keras_blender_model(train, features):
                                                                                                     "%Y-%m-%d-%H-%M"))
                 pd.DataFrame(history.history).to_csv(filename, index=False)
 
-            pred = model.predict(X_valid.as_matrix().copy())
+            pred = model.predict(X_valid[features].as_matrix().copy())
             full_preds[valid_index, :] += pred
             counts[valid_index, :] += 1
 
@@ -176,7 +176,7 @@ def create_keras_blender_model(train, features):
     for a in CLASSES:
         s[a] = 0.0
     s[CLASSES] = full_preds
-    s.to_csv(SUBM_PATH + 'ensemble_res/subm_{}_train.csv'.format('keras_blender'), index=False)
+    s.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_train.csv'.format('keras_blender'), index=False)
 
     print('Default score: {:.6f}'.format(score))
     print('Time: {} sec'.format(time.time() - start_time))
@@ -202,12 +202,7 @@ def run_keras():
     train, test, features = read_tables()
     gbm_type = 'keras_blender'
 
-    if 1:
-        score, valid_pred, model_list = create_keras_blender_model(train, features)
-        save_in_file((score, valid_pred, model_list), MODELS_PATH + 'keras_last_run_models.pklz'.format())
-    else:
-        score, valid_pred, model_list = load_from_file(MODELS_PATH + 'keras_last_run_models.pklz'.format())
-
+    score, valid_pred, model_list = create_keras_blender_model(train, features)
     preds = predict_with_keras_model(test, features, model_list)
 
     subm = pd.DataFrame(test['name'].values, columns=['fname'])
