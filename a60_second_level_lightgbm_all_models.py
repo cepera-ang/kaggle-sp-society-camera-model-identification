@@ -30,7 +30,7 @@ def create_lightgbm_model(train, features, iter1):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for iter in range(1):
+    for iter in range(100):
 
         # Debug
         num_folds = random.randint(3, 5)
@@ -243,4 +243,30 @@ Motorola-Nexus-6: [142, 138]
 Samsung-Galaxy-Note3: [138, 132]
 Sony-NEX-7: [133, 130]
 Difference in 49 pos from 2640. Percent: 1.86%
+
+20 models + rescale
+HTC-1-M7: [133, 131]
+iPhone-6: [132, 132]
+Motorola-Droid-Maxx: [132, 133]
+Motorola-X: [133, 132]
+Samsung-Galaxy-S4: [132, 131]
+iPhone-4s: [135, 132]
+LG-Nexus-5x: [125, 134]
+Motorola-Nexus-6: [128, 134]
+Samsung-Galaxy-Note3: [137, 132]
+Sony-NEX-7: [133, 129]
+Difference in 54 pos from 2640. Percent: 2.05%
+
+100 models
+HTC-1-M7: [133, 131]
+iPhone-6: [132, 132]
+Motorola-Droid-Maxx: [132, 133]
+Motorola-X: [133, 132]
+Samsung-Galaxy-S4: [132, 131]
+iPhone-4s: [133, 132]
+LG-Nexus-5x: [125, 134]
+Motorola-Nexus-6: [129, 134]
+Samsung-Galaxy-Note3: [137, 132]
+Sony-NEX-7: [134, 129]
+Difference in 53 pos from 2640. Percent: 2.01%
 '''

@@ -44,7 +44,7 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for zz in range(20):
+    for zz in range(100):
         print('Iteration: {}'.format(zz))
         num_folds = random.randint(3, 5)
         eta = random.uniform(0.1, 0.3)
@@ -78,7 +78,7 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
             "colsample_bytree": colsample_bytree,
             "silent": 1,
             "seed": 2017,
-            "nthread": 6,
+            "nthread": 10,
             # 'gpu_id': 0,
             # 'updater': 'grow_gpu_hist',
         }
@@ -107,8 +107,8 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
                 sample_weight_train = class_weight.compute_sample_weight('balanced', y_train)
                 sample_weight_valid = class_weight.compute_sample_weight('balanced', y_valid)
                 class_weight1 = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
-                coeff1 = random.randint(100, 200)
-                coeff2 = random.randint(2, 4)
+                coeff1 = random.randint(2, 4)
+                coeff2 = random.randint(1, 2)
                 sample_weight_train[y_train == CLASSES.index('LG-Nexus-5x')] *= coeff1
                 sample_weight_valid[y_valid == CLASSES.index('LG-Nexus-5x')] *= coeff1
                 sample_weight_train[y_train == CLASSES.index('Motorola-Nexus-6')] *= coeff2
@@ -283,7 +283,7 @@ def read_tables(rescale=True):
             exit()
     train['target'] = target
 
-    if 0:
+    if 1:
         sz_train = pd.read_csv(SUBM_PATH + 'ensemble_big/sizes/test_new_size_byte.csv')
         train = pd.merge(train, sz_train, on='name', left_index=True)
         sz_test = pd.read_csv(SUBM_PATH + 'ensemble_big/sizes/test_prod_size_byte.csv')
@@ -482,4 +482,32 @@ Motorola-Nexus-6: [117, 130]
 Samsung-Galaxy-Note3: [138, 132]
 Sony-NEX-7: [136, 131]
 Difference in 50 pos from 2640. Percent: 1.89%
+
+
+Default score: 0.976597
+Time: 2195.2633538246155 sec
+HTC-1-M7: [130, 132]
+iPhone-6: [133, 132]
+Motorola-Droid-Maxx: [131, 132]
+Motorola-X: [132, 132]
+Samsung-Galaxy-S4: [132, 131]
+iPhone-4s: [133, 132]
+LG-Nexus-5x: [136, 136]
+Motorola-Nexus-6: [120, 131]
+Samsung-Galaxy-Note3: [136, 132]
+Sony-NEX-7: [137, 130]
+Difference in 48 pos from 2640. Percent: 1.82%
+
+100 models (no rescale)
+HTC-1-M7: [133, 131]
+iPhone-6: [133, 132]
+Motorola-Droid-Maxx: [132, 133]
+Motorola-X: [133, 132]
+Samsung-Galaxy-S4: [134, 131]
+iPhone-4s: [134, 132]
+LG-Nexus-5x: [96, 126]
+Motorola-Nexus-6: [147, 138]
+Samsung-Galaxy-Note3: [140, 132]
+Sony-NEX-7: [138, 133]
+Difference in 54 pos from 2640. Percent: 2.05%
 '''

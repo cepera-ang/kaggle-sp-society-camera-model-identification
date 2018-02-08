@@ -7,7 +7,7 @@ Second level model, which uses all previously generated features, based on Keras
 
 if __name__ == '__main__':
     import os
-    gpu_use = 2
+    gpu_use = 3
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
     os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
@@ -20,6 +20,7 @@ from sklearn.utils import class_weight
 from a00_common_functions import *
 from a60_second_level_xgboost_all_models import read_tables, rename_columns, check_subm_distribution, check_subm_diff, get_kfold_split_xgboost
 
+random.seed(gpu_use)
 
 def batch_generator_train_blender_random_sample(X, y, batch_size):
     rng = list(range(X.shape[0]))
@@ -72,7 +73,7 @@ def ZF_keras_blender_v3(input_features):
     return model
 
 
-def create_keras_blender_model(train, features):
+def create_keras_blender_model(train, features, suffix):
     from keras import __version__
     import keras.backend as K
     from keras.callbacks import EarlyStopping, ModelCheckpoint
@@ -87,10 +88,10 @@ def create_keras_blender_model(train, features):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for iter in range(7):
+    for iter in range(30):
         num_folds = random.randint(3, 5)
         print('Iteration: {} Train shape: {}'.format(iter, train.shape))
-        ret = get_kfold_split_xgboost(train, num_folds, iter + 100)
+        ret = get_kfold_split_xgboost(train, num_folds, iter + round(time.time()) % 10000)
 
         fold_num = 0
         for train_files, valid_files in ret:
@@ -107,7 +108,7 @@ def create_keras_blender_model(train, features):
             y_valid_cat = to_categorical(y_valid, len(CLASSES))
 
             class_weight1 = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
-            class_weight1[6] *= random.randint(20, 50)
+            class_weight1[6] *= random.randint(1, 2)
             print('Class weights: {}'.format(class_weight1))
             print('Train data:', X_train.shape, y_train_cat.shape)
             print('Valid data:', X_valid.shape, y_valid_cat.shape)
@@ -116,8 +117,8 @@ def create_keras_blender_model(train, features):
 
             cnn_type = 'ZF_random_keras_blender'
             print('Creating and compiling model [{}]...'.format(cnn_type))
-            final_model_path = MODELS_PATH + '{}_fold_{}.h5'.format(cnn_type, fold_num)
-            cache_model_path = MODELS_PATH + '{}_temp_fold_{}.h5'.format(cnn_type, fold_num)
+            final_model_path = MODELS_PATH + '{}_fold_{}_{}.h5'.format(cnn_type, fold_num, gpu_use)
+            cache_model_path = MODELS_PATH + '{}_temp_fold_{}_{}.h5'.format(cnn_type, fold_num, gpu_use)
             model = ZF_random_keras_blender(len(features))
 
             if random.randint(0, 1) == 0:
@@ -187,7 +188,7 @@ def create_keras_blender_model(train, features):
     for a in CLASSES:
         s[a] = 0.0
     s[CLASSES] = full_preds
-    s.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_train.csv'.format('keras_blender'), index=False)
+    s.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_{}_train.csv'.format('keras_blender', suffix), index=False)
 
     print('Default score: {:.6f}'.format(score))
     print('Time: {} sec'.format(time.time() - start_time))
@@ -211,18 +212,22 @@ def get_readable_date(dt):
 
 def run_keras():
     train, test, features = read_tables(rescale=False)
-    gbm_type = 'keras_blender'
+    if 'size' in features:
+        features.remove('size')
 
-    score, valid_pred, model_list = create_keras_blender_model(train, features)
+    gbm_type = 'keras_blender'
+    suffix = time.time()
+
+    score, valid_pred, model_list = create_keras_blender_model(train, features, suffix)
     preds = predict_with_keras_model(test, features, model_list)
 
     subm = pd.DataFrame(test['name'].values, columns=['fname'])
     for a in CLASSES:
         subm[a] = 0.0
     subm[CLASSES] = preds
-    subm.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_test.csv'.format(gbm_type), index=False)
+    subm.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_{}_test.csv'.format(gbm_type, suffix), index=False)
 
-    submission_file = SUBM_PATH + 'ensemble_res/subm_{}_test.csv'.format(gbm_type)
+    submission_file = SUBM_PATH + 'ensemble_res/subm_{}_{}_test.csv'.format(gbm_type, suffix)
     subm['label_index'] = np.argmax(subm[CLASSES].as_matrix(), axis=1)
     subm['camera'] = np.array(CLASSES)[subm['label_index']]
     subm[['fname', 'camera']].to_csv(submission_file, index=False)
@@ -237,5 +242,16 @@ if __name__ == '__main__':
 
 
 '''
-
+30 iters:
+HTC-1-M7: [133, 132]
+iPhone-6: [133, 132]
+Motorola-Droid-Maxx: [131, 133]
+Motorola-X: [133, 132]
+Samsung-Galaxy-S4: [134, 132]
+iPhone-4s: [134, 132]
+LG-Nexus-5x: [92, 124]
+Motorola-Nexus-6: [150, 139]
+Samsung-Galaxy-Note3: [144, 132]
+Sony-NEX-7: [136, 132]
+Difference in 59 pos from 2640. Percent: 2.23%
 '''
