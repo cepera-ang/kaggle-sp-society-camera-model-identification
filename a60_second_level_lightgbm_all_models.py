@@ -99,7 +99,7 @@ def create_lightgbm_model(train, features, iter1):
                 sample_weight_train = class_weight.compute_sample_weight('balanced', y_train)
                 sample_weight_valid = class_weight.compute_sample_weight('balanced', y_valid)
                 class_weight1 = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
-                coeff1 = random.randint(100, 1000)
+                coeff1 = random.randint(1, 1)
                 sample_weight_train[y_train == CLASSES.index('LG-Nexus-5x')] *= coeff1
                 sample_weight_valid[y_valid == CLASSES.index('LG-Nexus-5x')] *= coeff1
                 # print(sample_weight1)

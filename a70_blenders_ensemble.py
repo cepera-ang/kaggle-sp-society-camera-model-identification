@@ -56,3 +56,31 @@ def ensemble():
 if __name__ == '__main__':
     ensemble()
 
+'''
+HTC-1-M7: [133, 132]
+iPhone-6: [133, 132]
+Motorola-Droid-Maxx: [131, 132]
+Motorola-X: [132, 132]
+Samsung-Galaxy-S4: [132, 131]
+iPhone-4s: [133, 132]
+LG-Nexus-5x: [128, 134]
+Motorola-Nexus-6: [126, 133]
+Samsung-Galaxy-Note3: [136, 132]
+Sony-NEX-7: [136, 130]
+Difference in 44 pos from 2640. Percent: 1.67%
+LB: 0.986
+
+Big
+HTC-1-M7: [133, 131]
+iPhone-6: [133, 132]
+Motorola-Droid-Maxx: [132, 133]
+Motorola-X: [133, 132]
+Samsung-Galaxy-S4: [133, 131]
+iPhone-4s: [134, 132]
+LG-Nexus-5x: [104, 130]
+Motorola-Nexus-6: [144, 136]
+Samsung-Galaxy-Note3: [139, 132]
+Sony-NEX-7: [135, 131]
+Difference in 49 pos from 2640. Percent: 1.86%
+
+'''
