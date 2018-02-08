@@ -577,6 +577,7 @@ def check_bicubic_change():
 
 
 if __name__ == '__main__':
+    # print(round(time.time()) % 10000)
     # test_1()
     # check_train_resolutions()
     # check_external_resolutions()
@@ -590,10 +591,10 @@ if __name__ == '__main__':
     # check_reading_speed()
     # improve_subm_v1(SUBM_PATH + '3_sq_mean_raw.csv', SUBM_PATH + '3_sq_mean_fixed.csv')
     # check_subm_distribution(SUBM_PATH + 'submission_resnet50_antorsaegen_119_val_0.9815068493150685_tta_arithmetic.csv')
-    # check_subm_diff(SUBM_PATH + '0.985_equal_2_power_mean_hun.csv', SUBM_PATH + 'submission_resnet50_antorsaegen_119_val_0.9815068493150685_tta_arithmetic.csv')
+    check_subm_diff(SUBM_PATH + '0.991_equal_2_pwr_mean_hun_5_prod-ce..csv', SUBM_PATH + 'equal_final_ensmble_6_raw_test..csv')
     # get_single_split_final(OUTPUT_PATH + 'common_image_info_additional.csv', OUTPUT_PATH + 'validation_files.pklz')
     # check_image_manipulation()
-    check_subm_diff_table()
+    # check_subm_diff_table()
     # check_gamma_change()
     # check_bicubic_change()
 
