@@ -108,7 +108,7 @@ def create_keras_blender_model(train, features, suffix):
             y_valid_cat = to_categorical(y_valid, len(CLASSES))
 
             class_weight1 = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
-            class_weight1[6] *= random.randint(1, 2)
+            class_weight1[6] *= random.randint(20, 50)
             print('Class weights: {}'.format(class_weight1))
             print('Train data:', X_train.shape, y_train_cat.shape)
             print('Valid data:', X_valid.shape, y_valid_cat.shape)
