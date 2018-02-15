@@ -360,6 +360,6 @@ def run_xgboost(iter_num):
 
 if __name__ == '__main__':
     start_time = time.time()
-    # Increase for better precision
-    run_xgboost(1)
+    # Increase iter_num for better precision
+    run_xgboost(20)
     print("Elapsed time overall: %s seconds" % (time.time() - start_time))

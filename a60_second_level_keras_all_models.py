@@ -210,14 +210,14 @@ def get_readable_date(dt):
     return datetime.datetime.fromtimestamp(dt).strftime('%Y-%m-%d %H:%M:%S')
 
 
-def run_keras(num_iters):
+def run_keras(iter_num):
     train, test, features = read_tables(rescale=False)
     if 'size' in features:
         features.remove('size')
 
     gbm_type = 'keras_blender'
 
-    score, valid_pred, model_list = create_keras_blender_model(train, features, num_iters)
+    score, valid_pred, model_list = create_keras_blender_model(train, features, iter_num)
     preds = predict_with_keras_model(test, features, model_list)
 
     subm = pd.DataFrame(test['name'].values, columns=['fname'])
@@ -236,6 +236,6 @@ def run_keras(num_iters):
 
 if __name__ == '__main__':
     start_time = time.time()
-    # Increase for better precision
+    # Increase iter_num for better precision
     run_keras(12)
     print("Elapsed time overall: %s seconds" % (time.time() - start_time))

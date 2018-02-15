@@ -2,3 +2,10 @@
 SUBM_PATH = '../subm/'
 HDF5_PATH = SUBM_PATH + 'ensemble_big/'
 2) hdf5 files must have *_train.hdf5 and *_test.hdf5 filenames. Same prefix for each independent model.
+3) Run one by one in following order (a60_* files can be run in parallel):
+python a60_second_level_keras_all_models.py
+python a60_second_level_lightgbm_all_models.py
+python a60_second_level_xgboost_all_models.py
+python a70_blenders_ensemble.py
+
+Result will be stored in "final_ensmble_3.csv" file in SUBM_PATH folder.
