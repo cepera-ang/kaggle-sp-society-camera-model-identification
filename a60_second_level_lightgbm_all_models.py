@@ -137,7 +137,7 @@ def create_lightgbm_model(train, features, iter_num):
     for a in CLASSES:
         s[a] = 0.0
     s[CLASSES] = full_preds
-    s.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_train.csv'.format('lightgbm'), index=False)
+    s.to_csv(SUBM_PATH + 'subm_raw_{}_train.csv'.format('lightgbm'), index=False)
 
     print('Default score: {:.6f}'.format(score))
     print('Time: {} sec'.format(time.time() - start_time))
