@@ -1,6 +1,10 @@
 # coding: utf-8
 __author__ = 'ZFTurbo: https://kaggle.com/zfturbo'
 
+'''
+Second level model, which uses all previously generated features, based on XGboost classifier
+'''
+
 
 import datetime
 from operator import itemgetter
@@ -34,7 +38,7 @@ def get_kfold_split_xgboost(train, num_folds=4, seed=66):
     return ret
 
 
-def create_xgboost_model(train, features, eta_value, depth, iter1):
+def create_xgboost_model(train, features, iter_num):
     import xgboost as xgb
     print('XGBoost version: {}'.format(xgb.__version__))
     start_time = time.time()
@@ -44,7 +48,7 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for zz in range(100):
+    for zz in range(iter_num):
         print('Iteration: {}'.format(zz))
         num_folds = random.randint(3, 5)
         eta = random.uniform(0.1, 0.3)
@@ -86,7 +90,7 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
         early_stopping_rounds = 25
 
         print('Train shape:', train.shape)
-        ret = get_kfold_split_xgboost(train, num_folds, iter1+zz)
+        ret = get_kfold_split_xgboost(train, num_folds, 2 + zz)
 
         fold_num = 0
         for train_files, valid_files in ret:
@@ -145,7 +149,7 @@ def create_xgboost_model(train, features, eta_value, depth, iter1):
     for a in CLASSES:
         s[a] = 0.0
     s[CLASSES] = full_preds
-    s.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_{}_train.csv'.format('xgboost', iter1), index=False)
+    s.to_csv(SUBM_PATH + 'subm_raw_{}_train.csv'.format('xgboost'), index=False)
 
     if 0:
         s['target'] = train['target']
@@ -217,21 +221,14 @@ def rename_columns(tbl, suffix):
 
 
 def read_tables(rescale=True):
-    train_list = [
-        (SUBM_PATH + 'ensemble_big/976_tta_8_densenet201_antorsaegen_62_0.98271093_train.hdf5', 1),
-        (SUBM_PATH + 'ensemble_big/977_tta_8_resnet50_antorsaegen_119_val_0.9815_train.hdf5', 1),
-        (SUBM_PATH + 'ensemble_big/DenseNet201_do0.3_doc0.0_avg-epoch072-val_acc0.981250_train.hdf5', 1),
-        (SUBM_PATH + 'ensemble_big/InceptionResNetV2_do0.1_avg-epoch154-val_acc0.965625_train.hdf5', 1),
-        (SUBM_PATH + 'ensemble_big/Xception_do0.3_avg-epoch079-val_acc0.991667_train.hdf5', 1),
-        (SUBM_PATH + 'ensemble_big/984_tta_8_densenet201_29_0.98624_train.hdf5', 1),
-    ]
+    train_list = glob.glob(HDF5_PATH + '*_train.hdf5')
 
     full_train = []
     full_test = []
     total = 0
     for train_val in train_list:
         print('Read: {}'.format(train_val))
-        p = train_val[0]
+        p = train_val
         train = pd.read_hdf(p, "prob")
         train = train.groupby(["name"]).aggregate('mean')
         train['name'] = train.index
@@ -283,7 +280,7 @@ def read_tables(rescale=True):
             exit()
     train['target'] = target
 
-    if 1:
+    if 0:
         sz_train = pd.read_csv(SUBM_PATH + 'ensemble_big/sizes/test_new_size_byte.csv')
         train = pd.merge(train, sz_train, on='name', left_index=True)
         sz_test = pd.read_csv(SUBM_PATH + 'ensemble_big/sizes/test_prod_size_byte.csv')
@@ -336,178 +333,33 @@ def check_subm_distribution(subm_path):
         print('{}: {}'.format(c, checker[c]))
 
 
-def check_subm_diff(s1p, s2p):
-    df1 = pd.read_csv(s1p)
-    df2 = pd.read_csv(s2p)
-    df1.sort_values('fname', inplace=True)
-    df1.reset_index(drop=True, inplace=True)
-    df2.sort_values('fname', inplace=True)
-    df2.reset_index(drop=True, inplace=True)
-    dff = len(df1[df1['camera'] != df2['camera']])
-    total = len(df1)
-    perc = 100 * dff / total
-    print('Difference in {} pos from {}. Percent: {:.2f}%'.format(dff, total, perc))
-
-
-def run_xgboost(eta, depth, iter1):
+def run_xgboost(iter_num):
     train, test, features = read_tables(rescale=False)
     gbm_type = 'xgboost'
 
     if 1:
-        score, valid_pred, model_list = create_xgboost_model(train, features, eta, depth, iter1)
-        save_in_file((score, valid_pred, model_list), MODELS_PATH + 'xgboost_last_run_models_{}.pklz'.format(iter1))
+        score, valid_pred, model_list = create_xgboost_model(train, features, iter_num)
+        save_in_file((score, valid_pred, model_list), MODELS_PATH + 'xgboost_last_run_models.pklz')
     else:
-        score, valid_pred, model_list = load_from_file(MODELS_PATH + 'xgboost_last_run_models_{}.pklz'.format(iter1))
+        score, valid_pred, model_list = load_from_file(MODELS_PATH + 'xgboost_last_run_models.pklz')
 
     preds = predict_with_xgboost_model(test, features, model_list)
     subm = pd.DataFrame(test['name'].values, columns=['fname'])
     for a in CLASSES:
         subm[a] = 0.0
     subm[CLASSES] = preds
-    subm.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_{}_test.csv'.format(gbm_type, iter1), index=False)
+    subm.to_csv(SUBM_PATH + 'subm_raw_{}_test.csv'.format(gbm_type), index=False)
 
-    submission_file = SUBM_PATH + 'ensemble_res/subm_{}_{}_test.csv'.format(gbm_type, iter1)
+    submission_file = SUBM_PATH + 'subm_{}_test.csv'.format(gbm_type)
     subm['label_index'] = np.argmax(subm[CLASSES].as_matrix(), axis=1)
     subm['camera'] = np.array(CLASSES)[subm['label_index']]
     subm[['fname', 'camera']].to_csv(submission_file, index=False)
     check_subm_distribution(submission_file)
-    check_subm_diff(SUBM_PATH + '0.991_equal_2_pwr_mean_hun_5_prod-ce..csv', submission_file)
+    # check_subm_diff(SUBM_PATH + '0.991_equal_2_pwr_mean_hun_5_prod-ce.csv', submission_file)
 
 
 if __name__ == '__main__':
     start_time = time.time()
-    # preproc_manip_densnet_201()
-    run_xgboost(0.2, 1, 2)
+    # Increase for better precision
+    run_xgboost(1)
     print("Elapsed time overall: %s seconds" % (time.time() - start_time))
-
-
-'''
-Default score: 0.991120
-HTC-1-M7: [133, 131]
-iPhone-6: [134, 132]
-Motorola-Droid-Maxx: [134, 133]
-Motorola-X: [132, 132]
-Samsung-Galaxy-S4: [135, 131]
-iPhone-4s: [135, 133]
-LG-Nexus-5x: [89, 122]
-Motorola-Nexus-6: [151, 140]
-Samsung-Galaxy-Note3: [142, 133]
-Sony-NEX-7: [135, 133]
-Difference in 68 pos from 2640. Percent: 2.58%
-
-Default run
-Default score: 0.990747
-HTC-1-M7: [134, 131]
-iPhone-6: [134, 132]
-Motorola-Droid-Maxx: [132, 133]
-Motorola-X: [132, 132]
-Samsung-Galaxy-S4: [135, 131]
-iPhone-4s: [134, 133]
-LG-Nexus-5x: [91, 124]
-Motorola-Nexus-6: [151, 139]
-Samsung-Galaxy-Note3: [142, 132]
-Sony-NEX-7: [135, 133]
-Difference in 63 pos from 2640. Percent: 2.39% LB: 0.982
-
-Rescale (uniform):
-Default score: 0.987413
-Time: 465.3627233505249 sec
-HTC-1-M7: [133, 131]
-iPhone-6: [134, 132]
-Motorola-Droid-Maxx: [131, 133]
-Motorola-X: [133, 132]
-Samsung-Galaxy-S4: [134, 131]
-iPhone-4s: [134, 133]
-LG-Nexus-5x: [94, 124]
-Motorola-Nexus-6: [148, 138]
-Samsung-Galaxy-Note3: [142, 132]
-Sony-NEX-7: [137, 134]
-Difference in 58 pos from 2640. Percent: 2.20%
-
-Rescale (uniform + Nexus*4):
-Default score: 0.984956
-Time: 465.3627233505249 sec
-HTC-1-M7: [133, 131]
-iPhone-6: [134, 132]
-Motorola-Droid-Maxx: [132, 133]
-Motorola-X: [133, 132]
-Samsung-Galaxy-S4: [133, 131]
-iPhone-4s: [134, 132]
-LG-Nexus-5x: [99, 126]
-Motorola-Nexus-6: [144, 138]
-Samsung-Galaxy-Note3: [141, 132]
-Sony-NEX-7: [137, 133]
-Difference in 52 pos from 2640. Percent: 1.97%
-
-Rescale (uniform + Nexus*50):
-Default score: 0.986832
-Time: 450.1165554523468 sec
-HTC-1-M7: [133, 131]
-iPhone-6: [133, 132]
-Motorola-Droid-Maxx: [133, 133]
-Motorola-X: [133, 132]
-Samsung-Galaxy-S4: [133, 131]
-iPhone-4s: [135, 132]
-LG-Nexus-5x: [116, 128]
-Motorola-Nexus-6: [130, 137]
-Samsung-Galaxy-Note3: [139, 132]
-Sony-NEX-7: [135, 132]
-Difference in 44 pos from 2640. Percent: 1.67%
-
-Rescale (uniform + Nexus*200):
-Default score: 0.992147
-Time: 990.5899105072021 sec
-HTC-1-M7: [133, 131]
-iPhone-6: [133, 132]
-Motorola-Droid-Maxx: [132, 133]
-Motorola-X: [132, 132]
-Samsung-Galaxy-S4: [133, 131]
-iPhone-4s: [134, 132]
-LG-Nexus-5x: [126, 131]
-Motorola-Nexus-6: [122, 135]
-Samsung-Galaxy-Note3: [138, 132]
-Sony-NEX-7: [137, 131]
-Difference in 46 pos from 2640. Percent: 1.74%
-
-v1: 20 runs (uniform + Nexus*200)
-XGBoost iter 0. FOLDS: 5 METRIC: merror ETA: 0.22576181674273743, MAX_DEPTH: 1, SUBSAMPLE: 0.9, COLSAMPLE_BY_TREE: 0.9
-HTC-1-M7: [132, 131]
-iPhone-6: [133, 132]
-Motorola-Droid-Maxx: [133, 133]
-Motorola-X: [132, 132]
-Samsung-Galaxy-S4: [133, 131]
-iPhone-4s: [134, 132]
-LG-Nexus-5x: [132, 136]
-Motorola-Nexus-6: [117, 130]
-Samsung-Galaxy-Note3: [138, 132]
-Sony-NEX-7: [136, 131]
-Difference in 50 pos from 2640. Percent: 1.89%
-
-
-Default score: 0.976597
-Time: 2195.2633538246155 sec
-HTC-1-M7: [130, 132]
-iPhone-6: [133, 132]
-Motorola-Droid-Maxx: [131, 132]
-Motorola-X: [132, 132]
-Samsung-Galaxy-S4: [132, 131]
-iPhone-4s: [133, 132]
-LG-Nexus-5x: [136, 136]
-Motorola-Nexus-6: [120, 131]
-Samsung-Galaxy-Note3: [136, 132]
-Sony-NEX-7: [137, 130]
-Difference in 48 pos from 2640. Percent: 1.82%
-
-100 models (no rescale)
-HTC-1-M7: [133, 131]
-iPhone-6: [133, 132]
-Motorola-Droid-Maxx: [132, 133]
-Motorola-X: [133, 132]
-Samsung-Galaxy-S4: [134, 131]
-iPhone-4s: [134, 132]
-LG-Nexus-5x: [96, 126]
-Motorola-Nexus-6: [147, 138]
-Samsung-Galaxy-Note3: [140, 132]
-Sony-NEX-7: [138, 133]
-Difference in 54 pos from 2640. Percent: 2.05%
-'''

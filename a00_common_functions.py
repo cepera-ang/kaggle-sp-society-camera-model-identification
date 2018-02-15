@@ -34,6 +34,7 @@ if not os.path.isdir(HISTORY_FOLDER_PATH):
 SUBM_PATH = '../subm/'
 if not os.path.isdir(SUBM_PATH):
     os.mkdir(SUBM_PATH)
+HDF5_PATH = SUBM_PATH + 'ensemble_big/'
 
 
 CLASSES = [

@@ -7,7 +7,7 @@ Second level model, which uses all previously generated features, based on Keras
 
 if __name__ == '__main__':
     import os
-    gpu_use = 3
+    gpu_use = 0
     print('GPU use: {}'.format(gpu_use))
     os.environ["KERAS_BACKEND"] = "tensorflow"
     os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_use)
@@ -18,7 +18,7 @@ import datetime
 from sklearn.metrics import accuracy_score
 from sklearn.utils import class_weight
 from a00_common_functions import *
-from a60_second_level_xgboost_all_models import read_tables, rename_columns, check_subm_distribution, check_subm_diff, get_kfold_split_xgboost
+from a60_second_level_xgboost_all_models import read_tables, rename_columns, check_subm_distribution, get_kfold_split_xgboost
 
 random.seed(gpu_use)
 
@@ -73,7 +73,7 @@ def ZF_keras_blender_v3(input_features):
     return model
 
 
-def create_keras_blender_model(train, features, suffix):
+def create_keras_blender_model(train, features, num_iters):
     from keras import __version__
     import keras.backend as K
     from keras.callbacks import EarlyStopping, ModelCheckpoint
@@ -88,7 +88,7 @@ def create_keras_blender_model(train, features, suffix):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for iter in range(30):
+    for iter in range(num_iters):
         num_folds = random.randint(3, 5)
         print('Iteration: {} Train shape: {}'.format(iter, train.shape))
         ret = get_kfold_split_xgboost(train, num_folds, iter + round(time.time()) % 10000)
@@ -188,7 +188,7 @@ def create_keras_blender_model(train, features, suffix):
     for a in CLASSES:
         s[a] = 0.0
     s[CLASSES] = full_preds
-    s.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_{}_train.csv'.format('keras_blender', suffix), index=False)
+    s.to_csv(SUBM_PATH + 'subm_raw_{}_train.csv'.format('keras_blender'), index=False)
 
     print('Default score: {:.6f}'.format(score))
     print('Time: {} sec'.format(time.time() - start_time))
@@ -210,48 +210,32 @@ def get_readable_date(dt):
     return datetime.datetime.fromtimestamp(dt).strftime('%Y-%m-%d %H:%M:%S')
 
 
-def run_keras():
+def run_keras(num_iters):
     train, test, features = read_tables(rescale=False)
     if 'size' in features:
         features.remove('size')
 
     gbm_type = 'keras_blender'
-    suffix = time.time()
 
-    score, valid_pred, model_list = create_keras_blender_model(train, features, suffix)
+    score, valid_pred, model_list = create_keras_blender_model(train, features, num_iters)
     preds = predict_with_keras_model(test, features, model_list)
 
     subm = pd.DataFrame(test['name'].values, columns=['fname'])
     for a in CLASSES:
         subm[a] = 0.0
     subm[CLASSES] = preds
-    subm.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_{}_test.csv'.format(gbm_type, suffix), index=False)
+    subm.to_csv(SUBM_PATH + 'subm_raw_{}_test.csv'.format(gbm_type), index=False)
 
-    submission_file = SUBM_PATH + 'ensemble_res/subm_{}_{}_test.csv'.format(gbm_type, suffix)
+    submission_file = SUBM_PATH + 'subm_{}_test.csv'.format(gbm_type)
     subm['label_index'] = np.argmax(subm[CLASSES].as_matrix(), axis=1)
     subm['camera'] = np.array(CLASSES)[subm['label_index']]
     subm[['fname', 'camera']].to_csv(submission_file, index=False)
     check_subm_distribution(submission_file)
-    check_subm_diff(SUBM_PATH + '0.991_equal_2_pwr_mean_hun_5_prod-ce..csv', submission_file)
+    # check_subm_diff(SUBM_PATH + '0.991_equal_2_pwr_mean_hun_5_prod-ce..csv', submission_file)
 
 
 if __name__ == '__main__':
     start_time = time.time()
-    run_keras()
+    # Increase for better precision
+    run_keras(12)
     print("Elapsed time overall: %s seconds" % (time.time() - start_time))
-
-
-'''
-30 iters:
-HTC-1-M7: [133, 132]
-iPhone-6: [133, 132]
-Motorola-Droid-Maxx: [131, 133]
-Motorola-X: [133, 132]
-Samsung-Galaxy-S4: [134, 132]
-iPhone-4s: [134, 132]
-LG-Nexus-5x: [92, 124]
-Motorola-Nexus-6: [150, 139]
-Samsung-Galaxy-Note3: [144, 132]
-Sony-NEX-7: [136, 132]
-Difference in 59 pos from 2640. Percent: 2.23%
-'''

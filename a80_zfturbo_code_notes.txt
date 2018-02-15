@@ -1,0 +1,4 @@
+1) To change path of input HDF5 files and folder to store intermediate results. Change constants in a00_common_functions.py file:
+SUBM_PATH = '../subm/'
+HDF5_PATH = SUBM_PATH + 'ensemble_big/'
+2) hdf5 files must have *_train.hdf5 and *_test.hdf5 filenames. Same prefix for each independent model.

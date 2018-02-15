@@ -1,11 +1,15 @@
 # coding: utf-8
 __author__ = 'ZFTurbo: https://kaggle.com/zfturbo'
 
+'''
+Second level model, which uses all previously generated features, based on LightGBM classifier
+'''
+
 
 import datetime
 from sklearn.metrics import accuracy_score
 from a00_common_functions import *
-from a60_second_level_xgboost_all_models import read_tables, rename_columns, check_subm_distribution, check_subm_diff, get_kfold_split_xgboost
+from a60_second_level_xgboost_all_models import read_tables, check_subm_distribution, get_kfold_split_xgboost
 from sklearn.utils import class_weight
 
 
@@ -20,7 +24,7 @@ def print_importance(features, gbm, prnt=True):
     return importance_arr
 
 
-def create_lightgbm_model(train, features, iter1):
+def create_lightgbm_model(train, features, iter_num):
     import lightgbm as lgb
     print('LightGBM version: {}'.format(lgb.__version__))
     start_time = time.time()
@@ -30,7 +34,7 @@ def create_lightgbm_model(train, features, iter1):
     full_preds = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
     counts = np.zeros((rescaled, len(CLASSES)), dtype=np.float32)
 
-    for iter in range(100):
+    for iter in range(iter_num):
 
         # Debug
         num_folds = random.randint(3, 5)
@@ -78,7 +82,7 @@ def create_lightgbm_model(train, features, iter1):
         early_stopping_rounds = 50
 
         print('Train shape:', train.shape)
-        ret = get_kfold_split_xgboost(train, num_folds, iter1 + iter)
+        ret = get_kfold_split_xgboost(train, num_folds, 2 + iter)
 
         fold_num = 0
         for train_files, valid_files in ret:
@@ -133,7 +137,7 @@ def create_lightgbm_model(train, features, iter1):
     for a in CLASSES:
         s[a] = 0.0
     s[CLASSES] = full_preds
-    s.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_{}_train.csv'.format('lightgbm', iter1), index=False)
+    s.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_train.csv'.format('lightgbm'), index=False)
 
     print('Default score: {:.6f}'.format(score))
     print('Time: {} sec'.format(time.time() - start_time))
@@ -158,15 +162,15 @@ def get_readable_date(dt):
     return datetime.datetime.fromtimestamp(dt).strftime('%Y-%m-%d %H:%M:%S')
 
 
-def run_lightgbm(lr, iter1):
+def run_lightgbm(iter_num):
     train, test, features = read_tables(rescale=False)
     gbm_type = 'lightgbm'
 
     if 1:
-        score, valid_pred, model_list = create_lightgbm_model(train, features, iter1)
-        save_in_file((score, valid_pred, model_list), MODELS_PATH + 'lightgbm_last_run_models_{}.pklz'.format(iter1))
+        score, valid_pred, model_list = create_lightgbm_model(train, features, iter_num)
+        save_in_file((score, valid_pred, model_list), MODELS_PATH + 'lightgbm_last_run_models.pklz')
     else:
-        score, valid_pred, model_list = load_from_file(MODELS_PATH + 'lightgbm_last_run_models_{}.pklz'.format(iter1))
+        score, valid_pred, model_list = load_from_file(MODELS_PATH + 'lightgbm_last_run_models.pklz')
 
     preds = predict_with_lightgbm_model(test, features, model_list)
 
@@ -174,99 +178,18 @@ def run_lightgbm(lr, iter1):
     for a in CLASSES:
         subm[a] = 0.0
     subm[CLASSES] = preds
-    subm.to_csv(SUBM_PATH + 'ensemble_res/subm_raw_{}_{}_test.csv'.format(gbm_type, iter1), index=False)
+    subm.to_csv(SUBM_PATH + 'subm_raw_{}_test.csv'.format(gbm_type), index=False)
 
-    submission_file = SUBM_PATH + 'ensemble_res/subm_{}_{}_test.csv'.format(gbm_type, iter1)
+    submission_file = SUBM_PATH + 'subm_{}_test.csv'.format(gbm_type)
     subm['label_index'] = np.argmax(subm[CLASSES].as_matrix(), axis=1)
     subm['camera'] = np.array(CLASSES)[subm['label_index']]
     subm[['fname', 'camera']].to_csv(submission_file, index=False)
     check_subm_distribution(submission_file)
-    check_subm_diff(SUBM_PATH + '0.991_equal_2_pwr_mean_hun_5_prod-ce..csv', submission_file)
+    # check_subm_diff(SUBM_PATH + '0.991_equal_2_pwr_mean_hun_5_prod-ce..csv', submission_file)
 
 
 if __name__ == '__main__':
     start_time = time.time()
-    run_lightgbm(0.010, 2)
+    # Increase for better precision
+    run_lightgbm(1)
     print("Elapsed time overall: %s seconds" % (time.time() - start_time))
-
-
-'''
-Single:
-HTC-1-M7: [133, 131]
-iPhone-6: [134, 132]
-Motorola-Droid-Maxx: [132, 134]
-Motorola-X: [133, 132]
-Samsung-Galaxy-S4: [134, 131]
-iPhone-4s: [134, 133]
-LG-Nexus-5x: [88, 123]
-Motorola-Nexus-6: [153, 140]
-Samsung-Galaxy-Note3: [144, 132]
-Sony-NEX-7: [135, 132]
-Difference in 67 pos from 2640. Percent: 2.54%
-
-20 models:
-Default score: 0.991182
-HTC-1-M7: [133, 131]
-iPhone-6: [133, 132]
-Motorola-Droid-Maxx: [132, 134]
-Motorola-X: [133, 132]
-Samsung-Galaxy-S4: [134, 131]
-iPhone-4s: [134, 133]
-LG-Nexus-5x: [89, 123]
-Motorola-Nexus-6: [152, 140]
-Samsung-Galaxy-Note3: [144, 132]
-Sony-NEX-7: [136, 132]
-Difference in 65 pos from 2640. Percent: 2.46%
-
-1 model + rescale
-HTC-1-M7: [133, 131]
-iPhone-6: [132, 132]
-Motorola-Droid-Maxx: [131, 133]
-Motorola-X: [133, 132]
-Samsung-Galaxy-S4: [134, 131]
-iPhone-4s: [134, 132]
-LG-Nexus-5x: [98, 126]
-Motorola-Nexus-6: [147, 139]
-Samsung-Galaxy-Note3: [142, 132]
-Sony-NEX-7: [136, 132]
-Difference in 53 pos from 2640. Percent: 2.01%
-
-1 model + rescale
-HTC-1-M7: [133, 131]
-iPhone-6: [132, 132]
-Motorola-Droid-Maxx: [132, 133]
-Motorola-X: [134, 132]
-Samsung-Galaxy-S4: [132, 131]
-iPhone-4s: [135, 132]
-LG-Nexus-5x: [109, 129]
-Motorola-Nexus-6: [142, 138]
-Samsung-Galaxy-Note3: [138, 132]
-Sony-NEX-7: [133, 130]
-Difference in 49 pos from 2640. Percent: 1.86%
-
-20 models + rescale
-HTC-1-M7: [133, 131]
-iPhone-6: [132, 132]
-Motorola-Droid-Maxx: [132, 133]
-Motorola-X: [133, 132]
-Samsung-Galaxy-S4: [132, 131]
-iPhone-4s: [135, 132]
-LG-Nexus-5x: [125, 134]
-Motorola-Nexus-6: [128, 134]
-Samsung-Galaxy-Note3: [137, 132]
-Sony-NEX-7: [133, 129]
-Difference in 54 pos from 2640. Percent: 2.05%
-
-100 models
-HTC-1-M7: [133, 131]
-iPhone-6: [132, 132]
-Motorola-Droid-Maxx: [132, 133]
-Motorola-X: [133, 132]
-Samsung-Galaxy-S4: [132, 131]
-iPhone-4s: [133, 132]
-LG-Nexus-5x: [125, 134]
-Motorola-Nexus-6: [129, 134]
-Samsung-Galaxy-Note3: [137, 132]
-Sony-NEX-7: [134, 129]
-Difference in 53 pos from 2640. Percent: 2.01%
-'''
