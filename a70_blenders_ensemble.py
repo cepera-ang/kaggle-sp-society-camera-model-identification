@@ -43,6 +43,7 @@ def ensemble():
     subm[['camera']].to_csv(submission_file)
     check_subm_distribution(submission_file)
     # check_subm_diff(SUBM_PATH + '0.991_equal_2_pwr_mean_hun_5_prod-ce..csv', submission_file)
+    print('Submission file stored in {}'.format(submission_file))
 
 
 if __name__ == '__main__':
