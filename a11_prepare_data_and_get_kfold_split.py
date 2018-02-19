@@ -14,7 +14,9 @@ import cv2
 from train import get_size_quality, get_crop, load_img_fast_jpg
 from tqdm import tqdm
 from multiprocessing import Pool, cpu_count
-INPUT_PATH = '../input/'
+INPUT_PATH = '/mnt/3E6EDD526EDD0395/'
+output_path = '../input/external_all_small/'
+
 OUTPUT_PATH = 'data/'
 
 iphone_soft = [
@@ -164,6 +166,7 @@ def md5_from_file(fname):
 def prepare_external_dataset(raw_path, output_path):
     hash_checker = dict()
     files = glob.glob(raw_path + '**/*.jpg', recursive=True)
+    print(raw_path)
     if os.path.isdir(output_path):
         print('Output folder "{}" already exists! You must delete it before proceed!'.format(output_path))
         y = input('Would you like to delete folder?')
@@ -174,7 +177,7 @@ def prepare_external_dataset(raw_path, output_path):
     os.mkdir(output_path)
     print('Files found: {}'.format(len(files)))
 
-    p = Pool(cpu_count() - 2)
+    p = Pool(1)
     # results = list of (hash, file)
     results = p.map(process_file, tqdm(files))
     for hsh, f in results:
@@ -189,48 +192,58 @@ def prepare_external_dataset(raw_path, output_path):
     print('Files in external folder: {}'.format(len(copied_files)))
     return exif_dict
 
-output_path = INPUT_PATH + 'external_all_small/'
 def process_file(f):
-    tags = exifread.process_file(open(f, 'rb'))
     try:
-        model = str(tags['Image Model'])
+        tags = exifread.process_file(open(f, 'rb'))
+        try:
+            model = str(tags['Image Model'])
+        except:
+            print('Broken Image Model EXIF: {}'.format(f))
+            return (None, None)
+        if model not in exif_dict:
+            print('Skip EXIF: Bad model {}'.format(model))
+            return (None, None)
+        try:
+            software = str(tags['Image Software'])
+        except:
+            # print('Broken Image Software EXIF: {}'.format(f))
+            software = 'none'
+        if (software not in iphone_soft) and (software[:4] not in good_software) and (model[:2] != 'XT'):
+            # print(software[:4])
+            print('Skip EXIF: Bad soft  {}'.format(software[:50]))
+            return (None, None)
+        w, h, q = get_size_quality(f)
+        shape = list((h, w))
+
+        if (q < 94) or (shape not in ALL_RESOLUTIONS):
+            print('Skip:', shape, q, f.split(sep='/')[-1])
+            return (None, None)
+
+        # Check unique hash
+        hsh = md5_from_file(f)
+
+        out_folder = output_path + exif_dict[model]
+        if not os.path.isdir(out_folder):
+            os.mkdir(out_folder)
+
+        img = load_img_fast_jpg(f)
+        shape = list((img.shape[1], img.shape[0]))
+        if (shape not in ALL_RESOLUTIONS):
+            print('Skip: shape ', shape, f.split(sep='/')[-1])
+            return (None, None)
+        if len(img.shape) != 3:
+            print('Skip: no 3 dim', f.split(sep='/')[-1])
+            return (None, None)
+
+        img = get_crop(img, CROP_SIZE)
+        file_name = f.split(sep='/')[-1][:-4] + '.tif'
+        full_name = os.path.join(out_folder, file_name)
+        # print('Saving file', file_name, os.path.join(out_folder, file_name))
+        cv2.imwrite(full_name, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+        # shutil.copy2(f, out_folder)
+        return (hsh, full_name)
     except:
-        print('Broken Image Model EXIF: {}'.format(f))
         return (None, None)
-    if model not in exif_dict:
-        print('Skip EXIF: Bad model {}'.format(model))
-        return (None, None)
-    try:
-        software = str(tags['Image Software'])
-    except:
-        # print('Broken Image Software EXIF: {}'.format(f))
-        software = 'none'
-    if (software not in iphone_soft) and (software[:4] not in good_software) and (model[:2] != 'XT'):
-        # print(software[:4])
-        print('Skip EXIF: Bad soft  {}'.format(software[:50]))
-        return (None, None)
-    w, h, q = get_size_quality(f)
-    shape = list((h, w))
-
-    if (q < 94) or (shape not in ALL_RESOLUTIONS):
-        print('Skip:', shape, q, f.split(sep='/')[-1])
-        return (None, None)
-
-    # Check unique hash
-    hsh = md5_from_file(f)
-
-    out_folder = output_path + exif_dict[model]
-    if not os.path.isdir(out_folder):
-        os.mkdir(out_folder)
-
-    img = load_img_fast_jpg(f)
-    img = get_crop(img, 520)
-    file_name = f.split(sep='/')[-1][:-4] + '.png'
-    full_name = os.path.join(out_folder, file_name)
-    # print('Saving file', file_name, os.path.join(out_folder, file_name))
-    cv2.imwrite(full_name, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-    # shutil.copy2(f, out_folder)
-    return (hsh, full_name)
 
 def get_kfold_split(num_folds=4, cache_path=None):
     if cache_path is None:
@@ -262,11 +275,11 @@ def get_kfold_split(num_folds=4, cache_path=None):
 
     return ret
 
-
+CROP_SIZE = 1024
 if __name__ == '__main__':
     # 1st param - location of your directories like 'flickr1', 'val_images' etc
     # 2nd parameter - location where files will be copied. Warning: you need to have sufficient space
-    prepare_external_dataset(INPUT_PATH + 'raw/', INPUT_PATH + 'external_all_small/')
+    prepare_external_dataset(INPUT_PATH + 'external/', output_path)
 
     # will return list of lists [[train1, valid1], [train2, valid2] , ... [trainK, validK]]
-    kf = get_kfold_split(num_folds=4)
+    # kf = get_kfold_split(num_folds=4)

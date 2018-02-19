@@ -23,7 +23,7 @@ from keras.applications import *
 from keras import backend as K
 from keras.engine.topology import Layer
 import keras
-
+# import tifffile as tiff
 from multi_gpu_keras import multi_gpu_model
 
 import skimage
@@ -84,7 +84,8 @@ parser.add_argument('--check-train', action='store_true', default=False, help='E
 args = parser.parse_args()
 
 TRAIN_FOLDER       = '../input/train'
-EXTRA_TRAIN_FOLDER = '../input/external'
+EXTRA_TRAIN_FOLDER = '../input/external_all_small'
+# EXTRA_TRAIN_FOLDER = '/mnt/3E6EDD526EDD0395/external_all_small'
 # NEW_TRAIN_FOLDER   = '../input/raw/flickr_new'
 # EXTRA_MOTOX_FOLDER = '../input/raw/moto_x_all'
 EXTRA_VAL_FOLDER   = '../input/val_images'
@@ -210,7 +211,7 @@ def random_manipulation(img, manipulation=None):
         manipulation = random.choice(MANIPULATIONS)
 
     if manipulation.startswith('jpg'):
-        quality = int(manipulation[3:]) + random.randint(-1, 1)
+        quality = int(manipulation[3:]) + random.randint(-5, 5)
         if random.randint(0, 1) == 0:
             out = BytesIO()
             im = Image.fromarray(img)
@@ -293,11 +294,13 @@ def get_crop(img, crop_size, random_crop=False):
         img = np.pad(img, ((pad_y//2, pad_y - pad_y//2), (pad_x//2, pad_x - pad_x//2), (0,0)), mode='wrap')
         center_x, center_y = img.shape[1] // 2, img.shape[0] // 2
     if random_crop:
-        freedom_x, freedom_y = img.shape[1] - crop_size, img.shape[0] - crop_size
+        freedom_x, freedom_y = img.shape[1]//2 - crop_size, img.shape[0]//2 - crop_size
         if freedom_x > 0:
-            center_x += np.random.randint(math.ceil(-freedom_x/2), freedom_x - math.floor(freedom_x/2) )
+            noise_x = int(np.random.normal(0, crop_size))
+            center_x += noise_x if abs(noise_x) < freedom_x else 0
         if freedom_y > 0:
-            center_y += np.random.randint(math.ceil(-freedom_y/2), freedom_y - math.floor(freedom_y/2) )
+            noise_y = int(np.random.normal(0, crop_size))
+            center_y += noise_y if abs(noise_y) < freedom_y else 0
 
     return img[center_y - half_crop : center_y + crop_size - half_crop, center_x - half_crop : center_x + crop_size - half_crop]
 
@@ -325,11 +328,11 @@ def process_item(item, training, transforms=[[]]):
 
     validation = not training 
 
-    w, h, q = get_size_quality(item)
-    shape = list((h, w))
+    # w, h, q = get_size_quality(item)
+    # shape = list((h, w))
 
-    if (shape not in ALL_RESOLUTIONS):
-        return None
+    # if (shape not in ALL_RESOLUTIONS):
+    #     return None
 
     if item[-4:] == '.jpg':
         img = load_img_fast_jpg(item)
@@ -347,6 +350,7 @@ def process_item(item, training, transforms=[[]]):
 
     # some images may not be downloaded correctly and are B/W, discard those
     if img.ndim != 3:
+        print('Return None, id:', item)
         return None
 
     if len(transforms) == 1:
@@ -384,7 +388,7 @@ def process_item(item, training, transforms=[[]]):
         if args.verbose:
             print("om: ", img.shape, item)
 
-        manipulated = 0. if q > 94 else 1.
+        manipulated = 0. # if q > 90 else 1.
         if ((np.random.rand() < 0.5) and training) or force_manipulation:
             img = random_manipulation(img)
             manipulated = 1.
@@ -479,7 +483,7 @@ if __name__ == '__main__':
 
         else:
             model = load_model(args.model, compile=False)
-
+        model.trainable = True
 
         args.classifier = match.group(2)
         CROP_SIZE = args.crop_size  = model.get_input_shape_at(0)[0][1]
@@ -498,7 +502,7 @@ if __name__ == '__main__':
             weights = 'imagenet' if args.use_imagenet_weights else None,
             input_shape=(CROP_SIZE, CROP_SIZE, 3),
             pooling=args.pooling if args.pooling != 'none' else None)
-
+        classifier_model.trainable = False
         x = input_image
         if args.learn_kernel_filter:
             x = Conv2D(3, (7, 7), strides=(1,1), use_bias=False, padding='valid', name='filtering')(x)
@@ -565,7 +569,14 @@ if __name__ == '__main__':
 
                 ids_val.extend(idx_to_transfer)
 
-            ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER, '.jpg'))
+            ids_train.extend(check_load_ids(EXTRA_TRAIN_FOLDER, '.*'))
+            # парсим валидацию и для каждого idx в валидации ищем и исключаем такой же из трейна
+            print('Train before removing ids_val:', len(ids_train))
+            ids_train = list(set(ids_train).difference(set([os.path.join(EXTRA_TRAIN_FOLDER,
+                                                                        idx.split(sep='/')[-2],
+                                                                        idx.split(sep='/')[-1]) for idx in ids_val])))
+            print('Train after removing ids_val:', len(ids_train))
+
             # ids_train.extend(check_load_ids(NEW_TRAIN_FOLDER))
             # ids_train.extend(check_load_ids(EXTRA_MOTOX_FOLDER))
 
@@ -601,7 +612,7 @@ if __name__ == '__main__':
                 monitor=monitor,
                 verbose=0,  save_best_only=True, save_weights_only=False, mode='max', period=1)
 
-        reduce_lr = ReduceLROnPlateau(monitor=monitor, factor=0.5, patience=2, min_lr=1e-10, epsilon = 0.00001, verbose=1, mode='max')
+        reduce_lr = ReduceLROnPlateau(monitor=monitor, factor=0.1, patience=5, min_lr=1e-10, epsilon = 0.00001, verbose=1, mode='max')
 
         model.fit_generator(
                 generator        = gen(ids_train, args.batch_size),
@@ -643,9 +654,10 @@ if __name__ == '__main__':
             for i, idx in enumerate(tqdm(ids)):
                 #fnames.append(idx.split("/")[-1])
                 img = np.array(Image.open(idx))
-                if args.test_train or args.classifier == 'MobileNet':
-                    img = get_crop(img, CROP_SIZE, random_crop=False)
-
+                print('img.loaded, shape', img.shape)
+                # if args.test_train or args.classifier == 'MobileNet':
+                img = get_crop(img, CROP_SIZE, random_crop=False)
+                print('img.cropped, shape', img.shape)
                 manipulated = np.float32([1. if idx.find('manip') != -1 else 0.])
 
                 sx = img.shape[1] // CROP_SIZE
@@ -653,6 +665,7 @@ if __name__ == '__main__':
                 j = 0
                 k = 8
                 img_batch = np.zeros((k * sx * sy, CROP_SIZE, CROP_SIZE, 3), dtype=np.float32)
+                print('img_batch', img_batch.shape)
                 manipulated_batch = np.zeros((k * sx * sy, 1),  dtype=np.float32)
                 timg = cv2.transpose(img)
                 for _img in [img, cv2.flip(img, 0), cv2.flip(img, 1), cv2.flip(img, -1),
@@ -664,8 +677,10 @@ if __name__ == '__main__':
                     j+=1
 
                 l = img_batch.shape[0]
+                print('img_batch.shape', img_batch.shape)
                 batch_size = args.batch_size
                 for i in range(l//batch_size+1):
+                    print(i*batch_size, min(l,(i+1)*batch_size))
                     batch_pred = model.predict_on_batch([img_batch[i*batch_size:min(l,(i+1)*batch_size)],
                                                          manipulated_batch[i*batch_size:min(l,(i+1)*batch_size)]])
                     if i==0:
@@ -676,8 +691,8 @@ if __name__ == '__main__':
                 probs = np.vstack((probs, prediction))
                 if prediction.shape[0] != 1: # TTA
                     #prediction = np.mean(prediction, axis=0)
-                    prediction = np.max(prediction, axis=0)
-                    #prediction = np.sqrt((np.mean(prediction**2, axis=0))
+                    # prediction = np.max(prediction, axis=0)
+                    prediction = np.sqrt((np.mean(prediction**2, axis=0)))
                     #prediction = scipy.stats.mstats.gmean(prediction, axis=0)
 
                 #print(prediction)
